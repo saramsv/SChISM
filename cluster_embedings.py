@@ -1,4 +1,5 @@
 from sklearn.cluster import KMeans
+from sklearn.cluster import AgglomerativeClustering
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 import sys
@@ -10,13 +11,10 @@ import datetime
 
 embedings_file = sys.argv[1]
 
-num_clusters = 2
-colors = [np.random.rand(3,) for i in range(num_clusters)]
 donors2imgs = {}
 donors2img2embed = {}
 
 def sort_dates(donors2imgs):
-    print(donors2imgs)
     for key in donors2imgs:
         dates = []
         for img in donors2imgs[key]:
@@ -49,22 +47,53 @@ def cal_day_from_deth(donors2imgs_sorted):
     # this a dictionary with each donor_id as keys and values are another 
     #dictionary with keys being xth days since day one and the values are a 
     #list of images that belong to day xth for that donor.
+def gen_cluster2img(labels, names):
+        import bpython
+        bpython.embed(locals())
+        cluster2img = {}
+        for index, label in enumerate(labels):
+            if label not in cluster2img:
+                cluster2img[label] = []
+            cluster2img[label].append(names[index])
+        return cluster2img
 
 def cluster(donor2img2embeding, donor2day2img):
+    img_names = []
+    donor2day2cluster2img = {}
     for donor in donor2img2embeding:
-        embedings_per_day_per_donor = [i for i in range(len(donor2day2img[donor]))] #how many days per donor
-        for day in donor2day2img[donor]: #iterate through each day per donor
-            embedings_per_day_per_donor[day] = donor2day2img[donor][day] # only to sort days
-        for day in embedings_per_day_per_donor:#each day would include a list of images
+        print(donor) 
+        all_days = []
+        for day in donor2day2img[donor]:
+            all_days.append(day)
+        all_days.sort() # this is a sorted list of day_from_frist_day
+        
+        for day in all_days:
             day_vector = []
-            for img in day:
+            for img in donor2day2img[donor][day]:
+                img_names.append(img)
                 day_vector.append(donor2img2embeding[donor][img])
 
-            ## cluster 
             vectors = np.array(day_vector)
+            '''
+            ## kmean cluster 
             kmeans = KMeans(n_clusters = num_clusters)
             kmeans.fit(vectors)
             labels = kmeans.predict(vectors)
+            '''
+
+            ## Agglomerative clustering
+            clustering = AgglomerativeClustering(n_clusters = 7).fit(vectors)           
+            labels = clustering.labels_
+            day_cluster = {}
+            cluster2img = gen_cluster2img(labels, img_names)
+            print(cluster2img)
+            day_cluster[day] = cluster2img 
+            donor2day2cluster2img[donor] = day_cluster
+            for index, label in enumerate(labels):
+                print(img_names[index] , " : " , label)
+            '''
+            num_clusters = len(np.unique(labels))
+            colors = [np.random.rand(3,) for i in range(num_clusters)]
 
             ## Reduce dimention to visualize
             model = TSNE(n_components=2, perplexity=40)
@@ -74,7 +103,7 @@ def cluster(donor2img2embeding, donor2day2img):
             for row_number in range(0, results.shape[0]):
                 plt.scatter(results[row_number,0]*100, results[row_number,1]*100, c = colors[labels[row_number]])
             plt.show()
-            
+            '''
 
 with open(embedings_file, 'r') as csv_file:
     data = csv.reader(csv_file,delimiter = '\n')
