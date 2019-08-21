@@ -1,5 +1,6 @@
 from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
+from sklearn.cluster import DBSCAN
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 import sys
@@ -48,8 +49,6 @@ def cal_day_from_deth(donors2imgs_sorted):
     #dictionary with keys being xth days since day one and the values are a 
     #list of images that belong to day xth for that donor.
 def gen_cluster2img(labels, names):
-        import bpython
-        bpython.embed(locals())
         cluster2img = {}
         for index, label in enumerate(labels):
             if label not in cluster2img:
@@ -61,7 +60,6 @@ def cluster(donor2img2embeding, donor2day2img):
     img_names = []
     donor2day2cluster2img = {}
     for donor in donor2img2embeding:
-        print(donor) 
         all_days = []
         for day in donor2day2img[donor]:
             all_days.append(day)
@@ -74,23 +72,29 @@ def cluster(donor2img2embeding, donor2day2img):
                 day_vector.append(donor2img2embeding[donor][img])
 
             vectors = np.array(day_vector)
+
+            ## DBscan clustering
+            dbscan = DBSCAN(eps=0.5, min_samples=5).fit(vectors)
+            labels = dbscan.labels_
+
             '''
             ## kmean cluster 
+            num_clusters = 5
             kmeans = KMeans(n_clusters = num_clusters)
             kmeans.fit(vectors)
             labels = kmeans.predict(vectors)
-            '''
 
             ## Agglomerative clustering
             clustering = AgglomerativeClustering(n_clusters = 7).fit(vectors)           
             labels = clustering.labels_
+
+            '''
             day_cluster = {}
             cluster2img = gen_cluster2img(labels, img_names)
-            print(cluster2img)
             day_cluster[day] = cluster2img 
             donor2day2cluster2img[donor] = day_cluster
             for index, label in enumerate(labels):
-                print(img_names[index] , " : " , label)
+                print(img_names[index] , " : " , donor, '_', day, '_' , label)
             '''
             num_clusters = len(np.unique(labels))
             colors = [np.random.rand(3,) for i in range(num_clusters)]
