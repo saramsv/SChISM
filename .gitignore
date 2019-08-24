@@ -2,3 +2,5 @@ data/
 results/
 *txt
 *csv
+ResNet50/logs*
+*hdf5
