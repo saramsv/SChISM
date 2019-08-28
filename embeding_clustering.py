@@ -3,6 +3,7 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.cluster import DBSCAN
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
+from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
 import sys
 import numpy as np
@@ -10,9 +11,15 @@ import csv
 import ast
 import datetime
 import pickle
+import argparse
 
 
-embedings_file = sys.argv[1] # This should be a pca version the embedings
+parser = argparse.ArgumentParser()
+parser.add_argument('--embeding_files', type = str)
+
+args = parser.parse_args()
+
+embedings_file = args.embeding_files #sys.argv[1] # This should be a pca version the embedings
 
 donors2imgs = {}
 donors2img2embed = {}
@@ -63,64 +70,39 @@ def cal_cluster2img(labels, names):
             cluster2img[label].append(names[index])
         return cluster2img
 
-def cluster(donor2img2embeding, donor2day2img):
-    img_names = []
-    donor2day2cluster2img = {}
-    for donor in donor2img2embeding:
-        all_days = []
-        for day in donor2day2img[donor]:
-            all_days.append(day)
-        all_days.sort() # this is a sorted list of day_from_frist_day
-        vectors = []
-        for day in all_days:
-            #day_vector = []
-            for img in donor2day2img[donor][day]:
-                img_names.append(img.replace('JPG','icon.JPG').replace('@',' '))
-                #day_vector.append(donor2img2embeding[donor][img])
-                vectors.append(donor2img2embeding[donor][img])
-
-            #vectors = np.array(day_vector)
-        vectors = np.array(vectors)
-
-        '''
-        ## DBscan clustering
-        dbscan = DBSCAN(eps=0.5, min_samples=5).fit(vectors)
-        labels = dbscan.labels_
-
-        ## Agglomerative clustering
-        clustering = AgglomerativeClustering(n_clusters = 7).fit(vectors)           
-        labels = clustering.labels_
-        '''
+def find_cluster_num(vectors):
+    potential_cluster_num = np.arange(2, 5, 1) # arange(start, stop, step)
+    silhouette_scores = []
+    for c in potential_cluster_num:
         ## kmean cluster 
-        num_clusters = 9
-        ## Reduce dimention to visualize
-        #model = TSNE(n_components=2, perplexity=40)
-        #model = PCA(n_components=2)
-        #results = model.fit_transform(vectors)
-        kmeans = KMeans(n_clusters = num_clusters)
+        kmeans = KMeans(n_clusters = c)
         kmeans.fit(vectors)
         labels = kmeans.predict(vectors)
+        score = silhouette_score(vectors, labels)
+        silhouette_scores.append(score)
+        print("[INFO] number of clusters is {} and the silhouette score is {}".format(c, score))
+    num_clusters = silhouette_scores.index(max(silhouette_scores)) + 2 #because I started with 2 for potential_cluster_num
+    import bpython
+    bpython.embed(locals())
+    print("best cluster number is ", num_clusters)
+    return num_clusters
 
+def cluster(donor2img2embeding, donor2day2img):
+    img_names = []
+    vectors = []
+    for donor in donor2img2embeding:
+        for img in donor2img2embeding[donor]:
+            img_names.append(img.replace('JPG','icon.JPG').replace('@',' '))
+            vectors.append(donor2img2embeding[donor][img])
+    vectors = np.array(vectors)
+    num_clusters = find_cluster_num(vectors)
+    kmeans = KMeans(n_clusters = num_clusters)
+    kmeans.fit(vectors)
+    labels = kmeans.predict(vectors)
 
-        #day_cluster = {}
-        #cluster2img = cal_cluster2img(labels, img_names)
-        #day_cluster[day] = cluster2img 
-        #donor2day2cluster2img[donor] = day_cluster
-        for index, label in enumerate(labels):
-            print(img_names[index] , " : " , donor, '_', day, '_' , label)
-        '''
-        num_clusters = len(np.unique(labels))
-        colors = [np.random.rand(3,) for i in range(num_clusters)]
+    #for index, label in enumerate(labels):
+    #    print(img_names[index] , ":" ,  label)
 
-        ## Reduce dimention to visualize
-        model = TSNE(n_components=2, perplexity=40)
-        results = model.fit_transform(vectors)
-
-        plt.figure(figsize=(8,5))
-        for row_number in range(0, results.shape[0]):
-            plt.scatter(results[row_number,0]*100, results[row_number,1]*100, c = colors[labels[row_number]])
-        plt.show()
-        '''
 
 def cal_feature_extention(img, donors_id, day_number, donor):
     extention = np.zeros(len(donors_id))

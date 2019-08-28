@@ -10,6 +10,7 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from keras.models import Model
+from multiprocessing import Pool
 import cv2
 import sys
 import csv
@@ -60,43 +61,49 @@ elif weight_type == 'ft':
 
 clustering_model.compile(optimizer='sgd', loss='categorical_crossentropy', metrics=['accuracy'])
 
-missed_imgs = []
 rows = []
-line_number = 0
-    
+all_paths = []
+
 with open(imgs_path) as csv_file:
-    paths = csv.reader (csv_file, delimiter='\n')
-    img_names = []
+    paths = csv.reader (csv_file, delimiter=',') 
+    ## all of the paths in the given file should be separated by , 
+    ##so that the endresult for paths after the for loop would be
+    ## a list with each elemant being a path to an image
     for path in paths:
-        line_number += 1
-        if line_number % 5000 == 0:
-            print(line_number)
-        row = []
-        correct_path = path[0]
-        correct_path.replace(' ', '\ ')
-        correct_path.replace('(', '\(')
-        correct_path.replace(')', '\)')
-        try:
-            img_object = cv2.imread(correct_path)
-            img_object = cv2.resize(img_object, (img_size, img_size))
-            img_object = np.array(img_object, dtype = np.float64)
-            img_object = preprocess_input(np.expand_dims(img_object.copy(), axis = 0))
+        all_paths = path
+        print("[INFO] number of read paths are {}".format(len(all_paths)))
 
-            resnet_feature = clustering_model.predict(img_object)
-            resnet_feature = np.array(resnet_feature)
-            if feature_type == 'PCA':
-                img_names.append(correct_path)
-                row = list(resnet_feature.flatten())
-                rows.append(row)
-            elif feature_type == 'resnet':
-                row.append(correct_path)
-                row.extend(list(resnet_feature.flatten()))
-                rows.append(row)
-            #print(row)
-        except: 
-            missed_imgs.append(path)
-        #embedings.append(row)
+def get_img(path):
+    correct_path = path#[0]
+    correct_path.replace(' ', '\ ')
+    correct_path.replace('(', '\(')
+    correct_path.replace(')', '\)')
+    print(correct_path)
+    img_object = cv2.imread(correct_path)
+    img_object = cv2.resize(img_object, (img_size, img_size))
+    img_object = np.array(img_object, dtype = np.float64)
+    img_object = preprocess_input(np.expand_dims(img_object.copy(), axis = 0))
 
+    resnet_feature = clustering_model.predict(img_object)
+    resnet_feature = np.array(resnet_feature)
+    return resnet_feature
+
+def cal_fearue(path):
+
+        resnet_feature = get_img(path)
+        if feature_type == 'PCA':
+            img_names.append(correct_path)
+            return list(resnet_feature.flatten())
+        elif feature_type == 'resnet':
+            row = []
+            row.append(correct_path)
+            row.extend(list(resnet_feature.flatten()))
+            return row
+p = Pool(10)
+rows = p.map(cal_fearue, all_paths)
+print("[INFO] Finised Generating the Features")
+
+'''
 if feature_type == 'PCA':
     vectors = np.array(rows)
     model = PCA(n_components = 5)
@@ -108,3 +115,4 @@ if feature_type == 'resnet':
     with open(embeding_file+ '.csv', 'w') as csv_file:
         writer = csv.writer(csv_file, lineterminator = '\n')
         writer.writerows(rows)
+'''
