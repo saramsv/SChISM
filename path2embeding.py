@@ -1,4 +1,5 @@
-#python3 path2embeding.py --img_path data/some_paths --weight_type pt --feature_type PCA --save_to resnet_features_filename > pca_feautres_filename
+# only use it to generate the resnet features then use the other script to convert to pca
+#python3 path2embeding.py --img_path data/some_paths --weight_type pt  > resnet_feautres_filename
 #then clean the [] and , from the all_embedings.csv
 import keras
 from keras.applications import ResNet50
@@ -18,15 +19,11 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--img_path', type = str)
 parser.add_argument('--weight_type', type = str)
-parser.add_argument('--feature_type', type = str)
-parser.add_argument('--save_to', type = str)
 
 args = parser.parse_args()
 
 imgs_path = args.img_path
 weight_type = args.weight_type
-feature_type = args.feature_type
-embeding_file = args.save_to
 
 
 img_size = 224
@@ -58,19 +55,16 @@ elif weight_type == 'ft':
 
     clustering_model.layers[0].trainable = False
 
+
 clustering_model.compile(optimizer='sgd', loss='categorical_crossentropy', metrics=['accuracy'])
 
 missed_imgs = []
 rows = []
-line_number = 0
     
 with open(imgs_path) as csv_file:
     paths = csv.reader (csv_file, delimiter='\n')
     img_names = []
     for path in paths:
-        line_number += 1
-        if line_number % 5000 == 0:
-            print(line_number)
         row = []
         correct_path = path[0]
         correct_path.replace(' ', '\ ')
@@ -84,27 +78,8 @@ with open(imgs_path) as csv_file:
 
             resnet_feature = clustering_model.predict(img_object)
             resnet_feature = np.array(resnet_feature)
-            if feature_type == 'PCA':
-                img_names.append(correct_path)
-                row = list(resnet_feature.flatten())
-                rows.append(row)
-            elif feature_type == 'resnet':
-                row.append(correct_path)
-                row.extend(list(resnet_feature.flatten()))
-                rows.append(row)
-            #print(row)
+            row.append(correct_path)
+            row.extend(list(resnet_feature.flatten()))
+            print(row)
         except: 
             missed_imgs.append(path)
-        #embedings.append(row)
-
-if feature_type == 'PCA':
-    vectors = np.array(rows)
-    model = PCA(n_components = 5)
-    results = model.fit_transform(vectors)
-    for index, img in enumerate(img_names):
-        print(img, ",", list(results[index,:]))
-
-if feature_type == 'resnet':
-    with open(embeding_file+ '.csv', 'w') as csv_file:
-        writer = csv.writer(csv_file, lineterminator = '\n')
-        writer.writerows(rows)
