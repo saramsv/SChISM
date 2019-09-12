@@ -1,4 +1,4 @@
-#python3 embeding_clustering_full_kmeans.py --embeding_file data/pcaUT29-15 --modify false/true --daily false/true  --cluster_number 7 --method merge/not_merge --merge_type single/multi > daily_merge_7ClusAll
+#python3 embeding_clustering_full_kmeans.py --embeding_file data/pcaUT29-15 --modify false/true --daily false/true  --cluster_number 7 --method merge/not_merge --merge_type single/multi --ADD_file imgname2ADD > daily_merge_7ClusAll
 # the file for this script should be image_name va1l val2.... valn.
 from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
@@ -28,6 +28,7 @@ parser.add_argument('--daily', type = str) #True or False
 parser.add_argument('--cluster_number') # A number
 parser.add_argument('--method') # merge/not-merge
 parser.add_argument('--merge_type') #single or multi (only one donors or multiple)
+parser.add_argument('--ADD_file') # the file that include the image names (no space, (, ), and JPG) as the first column and the ADDs as the second column
 
 args = parser.parse_args()
 
@@ -37,9 +38,11 @@ Daily = args.daily
 num_clusters = int(args.cluster_number)
 method = args.method
 merge_type = args.merge_type
+ADD_file = args.ADD_file
 
 donors2imgs = {}
 donors2img2embed = {}
+imgname2add = {}
 
 def key_func(x):
     # For some yesr line 2011 the year is 2 digits so the date format should ne %m%d%y but for others like 2015 it should be %m%d%Y
@@ -384,12 +387,15 @@ def cal_feature_extention(img, donors_id, day_number, donor, max_day):
     #index = donors_id.index(donor)
     #extention[index] = 1
     #extention = list(extention)
+    '''
     extention.append(day_number / max_day)
     if '(' not in img:
         img_num = 0
     else:
         img_num = img.split('(')[1].split(')')[0]
     extention.append(int(img_num))
+    '''
+    extention.append(float(imgname2add[img.split()[1].split('/')[-1]])) #the part of the image name that is before the space
     return extention
      
     
@@ -409,6 +415,14 @@ def modify_features(donors2img2embed, donor2day2imgs):
                 extention = cal_feature_extention(img, donors_id, day, donor, max_day) 
                 donors2img2embed[donor][img].extend(extention)
     return donors2img2embed
+    
+with open(ADD_file, 'r') as add_file:
+    content = csv.reader(add_file, delimiter = '\n')
+    for row in content:
+        row = row[0].split()
+        name = row[0]
+        ADD = row[1]
+        imgname2add[name] = ADD
     
 
 with open(embedings_file, 'r') as csv_file:
