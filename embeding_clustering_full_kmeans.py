@@ -6,6 +6,7 @@ from sklearn.cluster import DBSCAN
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
+from sklearn.cluster import SpectralClustering
 import matplotlib.pyplot as plt
 import sys
 import numpy as np
@@ -97,7 +98,7 @@ def cal_cluster2img(labels, names):
         return cluster2img
 
 def find_cluster_num(vectors):
-    potential_cluster_num = np.arange(2, 10, 1) # arange(start, stop, step)
+    potential_cluster_num = np.arange(2, 20, 1) # arange(start, stop, step)
     silhouette_scores = []
     for c in potential_cluster_num:
         ## kmean cluster 
@@ -119,13 +120,40 @@ def cluster(donor2img2embeding, donor2day2img):
             img_names.append(img.replace('JPG','icon.JPG').replace(' ',' '))
             vectors.append(donor2img2embeding[donor][img])
     vectors = np.array(vectors)
-    #num_clusters = 15 #find_cluster_num(vectors)
+    vectors = vectors / vectors.max(axis=0)
+    #vectors_tsne = TSNE(n_components=2, perplexity=50, early_exaggeration=12.0, learning_rate=200.0, n_iter=4000, n_iter_without_progress=100, min_grad_norm=1e-07).fit_transform(vectors)
+    #vectors_tsne = TSNE(n_components=2, perplexity=50, early_exaggeration=12.0, learning_rate=200.0, n_iter=4000, n_iter_without_progress=100, min_grad_norm=1e-07, metric=’euclidean’, init=’pca’, method=’barnes_hut’, angle=0.5).fit_transform(vectors)
+    ''' 
+    This is for generating data for parallax
+    i = 0
+    for j in vectors:
+        print(img_names[i])
+        print(j)
+        i = i + 1
+    exit()
+    '''
+    #num_clusters = find_cluster_num(vectors)
+    ## kmeans:
     kmeans = KMeans(n_clusters = num_clusters)
     kmeans.fit(vectors)
     labels = kmeans.predict(vectors)
-    score = silhouette_score(vectors, labels)
-    #print(score)
+    '''
+    import bpython
+    bpython.embed(locals())
+    exit()
+    agglomerative = AgglomerativeClustering(n_clusters = num_clusters, linkage='single')
+    agglomerative.fit(list(vectors))
+    labels = agglomerative.labels_#predict(vectors)
+    '''
 
+    cluster_dist(labels, kmeans, vectors)
+    #score = silhouette_score(vectors, labels)
+    #print(score)
+    '''
+    ## SpectralClustering
+    clustering = SpectralClustering(n_clusters= num_clusters, affinity='nearest_neighbors',assign_labels='kmeans')
+    labels = clustering.fit_predict(vectors_tsne)
+    '''
     for index, label in enumerate(labels):
         print(img_names[index] , ":" ,  label)
 
@@ -154,11 +182,21 @@ def daily_clustering(donor2img2embeding, donor2day2img):
         kmeans = KMeans(n_clusters = num_clusters)
         kmeans.fit(vectors)
         labels = kmeans.predict(vectors)
-        score = silhouette_score(vectors, labels)
-        print(score)
+        #score = silhouette_score(vectors, labels)
+        #print(score)
 
         for index, label in enumerate(labels):
             print(days_data[day][0][index] , ":" , day, "_", label)
+
+
+def cluster_dist(labels, kmeans, vectors):
+    for l1 in np.unique(labels):
+        dist_list = []
+        for l2 in np.unique(labels):
+            dist = distance.euclidean(kmeans.cluster_centers_[l1], kmeans.cluster_centers_[l2]) # find the distance between the centers
+            print(l1, l2, dist)
+            #dist_list.append(dist)
+
 
 # This function will put all images for each day across donor and then cluster per day and then merge each day to the next
 def daily_clustering_per_multidonor(donor2img2embeding, donor2day2img):
@@ -217,7 +255,7 @@ def daily_clustering_per_multidonor(donor2img2embeding, donor2day2img):
     return day2clus2emb
 
 ############################################################## 
-# This clusters images of one day per donor and then merges the
+# This clusters images of one day per donor and then merges them
 ##############################################################
 
 def daily_clustering_per_donor(donor2img2embeding, donor2day2img):
@@ -380,7 +418,7 @@ def find_associations(days, day2clus2imgs, day2clus2emb):
             clusters[merging_clusters[0]] = day2clus2imgs[day][merging_clusters[0]] 
     '''      
 
-def cal_feature_extention(img, donors_id, day_number, donor, max_day):
+def cal_feature_extention(img, donors_id, day_number, donor, max_day, imgname2add):
     extention = []
     #commented out the followings to get rid of the info about which donor = one hot encoding
     #extention = np.zeros(len(donors_id))
@@ -395,7 +433,8 @@ def cal_feature_extention(img, donors_id, day_number, donor, max_day):
         img_num = img.split('(')[1].split(')')[0]
     extention.append(int(img_num))
     '''
-    extention.append(float(imgname2add[img.split()[1].split('/')[-1]])) #the part of the image name that is before the space
+    for x in imgname2add[img.split()[1].split('/')[-1]]:
+        extention.append(float(x)) #the part of the image name that is before the space
     return extention
      
     
@@ -412,16 +451,16 @@ def modify_features(donors2img2embed, donor2day2imgs):
         daily_imgs = donor2day2imgs[donor] # this is a dict with this format: {day1: [images], day2: [images]...}
         for day in daily_imgs: #iterate for all of the days
             for img in daily_imgs[day]: #iterate through images for each day
-                extention = cal_feature_extention(img, donors_id, day, donor, max_day) 
+                extention = cal_feature_extention(img, donors_id, day, donor, max_day, imgname2add) 
                 donors2img2embed[donor][img].extend(extention)
     return donors2img2embed
     
 with open(ADD_file, 'r') as add_file:
     content = csv.reader(add_file, delimiter = '\n')
     for row in content:
-        row = row[0].split()
+        row = row[0].split(',')
         name = row[0]
-        ADD = row[1]
+        ADD = ast.literal_eval("[" + row[1].strip().replace(' ', ',') + "]") # this should be a list of temp, humadity and wind ADD
         imgname2add[name] = ADD
     
 
