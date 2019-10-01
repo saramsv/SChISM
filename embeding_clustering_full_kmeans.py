@@ -28,7 +28,7 @@ parser.add_argument('--modify', type = str) #True or False
 parser.add_argument('--daily', type = str) #True or False
 parser.add_argument('--cluster_number') # A number
 parser.add_argument('--method') # merge/not-merge
-parser.add_argument('--merge_type') #single or multi (only one donors or multiple)
+parser.add_argument('--merge_type') #single or multi (only one donors or multi)
 parser.add_argument('--ADD_file') # the file that include the image names (no space, (, ), and JPG) as the first column and the ADDs as the second column
 
 args = parser.parse_args()
@@ -138,6 +138,14 @@ def cluster(donor2img2embeding, donor2day2img):
     kmeans.fit(vectors)
     labels = kmeans.predict(vectors)
     '''
+    ######### Agglomerative ######
+    agglomerative = AgglomerativeClustering(n_clusters = num_clusters, linkage='single')
+    agglomerative.fit(list(vectors))
+    labels = agglomerative.labels_#predict(vectors)
+
+    '''
+
+    '''
     import bpython
     bpython.embed(locals())
     exit()
@@ -176,7 +184,7 @@ def daily_clustering(donor2img2embeding, donor2day2img):
         vectors = np.array(vectors)
         #num_clusters = 15 #find_cluster_num(vectors)
 
-        if len(days_data[day][0]) < num_clusters:
+        if len(days_data[day][0]) < 2* num_clusters:
             continue
 
         kmeans = KMeans(n_clusters = num_clusters)
@@ -194,7 +202,7 @@ def cluster_dist(labels, kmeans, vectors):
         dist_list = []
         for l2 in np.unique(labels):
             dist = distance.euclidean(kmeans.cluster_centers_[l1], kmeans.cluster_centers_[l2]) # find the distance between the centers
-            print(l1, l2, dist)
+            #print(l1, l2, dist)
             #dist_list.append(dist)
 
 
@@ -223,7 +231,7 @@ def daily_clustering_per_multidonor(donor2img2embeding, donor2day2img):
         img_names = days_data[day][0]
         vectors = np.array(vectors)
 
-        if len(vectors) < num_clusters :
+        if len(vectors) < 2* num_clusters :
             continue
         else:
             days.append(day)
@@ -251,7 +259,7 @@ def daily_clustering_per_multidonor(donor2img2embeding, donor2day2img):
 
             for index, label in enumerate(labels):
                 print(img_names[index] , ":" ,donor, "_", day, "_", label)
-    find_associations(days, day2clus2imgs, day2clus2emb)
+    find_associations(days, day2clus2imgs, day2clus2emb, donor)# the donor is not needed realy in this case. That is for single donor merging
     return day2clus2emb
 
 ############################################################## 
@@ -259,10 +267,10 @@ def daily_clustering_per_multidonor(donor2img2embeding, donor2day2img):
 ##############################################################
 
 def daily_clustering_per_donor(donor2img2embeding, donor2day2img):
-    day2clus2emb = {}#each cluster will have one vector which is the center/average of the ones belonging to it
-    day2clus2imgs = {} # each claster (key) would have a value of the lsit of image names belonging to it
-    days = []
     for donor in donor2day2img:
+        day2clus2emb = {}#each cluster will have one vector which is the center/average of the ones belonging to it
+        day2clus2imgs = {} # each claster (key) would have a value of the lsit of image names belonging to it
+        days = []
         for day in donor2day2img[donor]:
             vectors = []
             img_names = []
@@ -272,8 +280,10 @@ def daily_clustering_per_donor(donor2img2embeding, donor2day2img):
                 img_names.append(img.replace('JPG','icon.JPG'))
 
             vectors = np.array(vectors)
+            #normalize
+            #vectors = vectors / vectors.max(axis=0)
 
-            if len(vectors) < num_clusters :
+            if len(vectors) < 1.5 * num_clusters :
                 continue
             else:
                 days.append(day)
@@ -292,11 +302,17 @@ def daily_clustering_per_donor(donor2img2embeding, donor2day2img):
                 kn = KneeLocator(x, sum_of_squared_distances, curve='convex', direction='decreasing')
                 print(kn.knee)
                 '''
-
+                #### KMeans ###########
                 kmeans = KMeans(n_clusters = num_clusters)
                 kmeans.fit(vectors)
                 labels = kmeans.predict(vectors)
-                
+                '''
+                ######### Agglomerative ######
+                agglomerative = AgglomerativeClustering(n_clusters = num_clusters, linkage='single')
+                agglomerative.fit(list(vectors))
+                labels = agglomerative.labels_#predict(vectors)
+
+                '''
                 #score = silhouette_score(vectors, labels)
                 #print(score)
                 cluster_ids = np.array(labels)
@@ -316,25 +332,29 @@ def daily_clustering_per_donor(donor2img2embeding, donor2day2img):
                     clus2imgs[clus] = list(temp) if type(temp) is tuple else [temp]
                     day2clus2imgs[day] = clus2imgs
 
+                '''
                 for index, label in enumerate(labels):
                     print(img_names[index] , ":" ,donor, "_", day, "_", label)
-        find_associations(days, day2clus2imgs, day2clus2emb)
+                '''
+        find_associations(days, day2clus2imgs, day2clus2emb, donor)
     return day2clus2emb
 
-def find_associations(days, day2clus2imgs, day2clus2emb):
+def find_associations(days, day2clus2imgs, day2clus2emb, donor):
     days.sort()
     num_days = len(days)
     merges = []
     day = days[0]
+    
 
     all_day_dists = {}
+    all_match_dists = []
 
     for index in range(num_days - 1):
         day = days[index]
         next_day = days[index + 1]
         #if they don't have image for the next 40 days it must be only bones
-        if next_day - day > 40:
-            break
+        #if next_day - day > 40:
+        #    break
         all_dists = []
         for clus1 in range(num_clusters):
             for clus2 in range(num_clusters):
@@ -350,10 +370,6 @@ def find_associations(days, day2clus2imgs, day2clus2emb):
                 row.append(clus2)
                 row.append(dist) 
                 all_dists.append(row)
-            #print("dists: ", dists) 
-            #similar_clus = dists.index(min(dists)) 
-            #print("similar: ", similar_clus)
-            #clusters[clus1].extend(day2clus2imgs[next_day][similar_clus])
         '''
         for key in clusters:
             for img in clusters[key]:
@@ -362,16 +378,20 @@ def find_associations(days, day2clus2imgs, day2clus2emb):
         seen1 = set()
         seen2 = set()
         merged = []
-
+        
         all_day_dists[index] = {(x[0], x[1]): x[2] for x in all_dists}
 
+        match_dists = []
         for i, l in enumerate(sorted(all_dists, key=lambda x: x[2], reverse=False)):
             if l[0] not in seen1 and l[1] not in seen2: 
                 merged.append([l[0], l[1]])
+                match_dists.append(l[2])
                 seen1.add(l[0])
                 seen2.add(l[1])
-                    
+        all_match_dists.append(match_dists)
         merges.append(merged)
+
+    std_ = np.std(np.array(all_match_dists))
 
     def findNext(pair, day_index):
         if day_index >= len(merges):
@@ -396,12 +416,11 @@ def find_associations(days, day2clus2imgs, day2clus2emb):
 
             next_cluster = temp[day_index + 1]
             _distance = all_day_dists[day_index][(cluster, next_cluster)]
-            if _distance > 22: 
+            if _distance > std_: 
                 groups.append(group)
                 group = {'cluster': [], 'day': day_index} 
 
         #groups.append(temp)
-
     clusters = []
     for group in groups:
         images = []
@@ -411,7 +430,7 @@ def find_associations(days, day2clus2imgs, day2clus2emb):
         clusters.append(sorted(images, key = key_func))
     for i, imgs in enumerate(clusters):
         for img in imgs:
-            print(img.replace('.JPG', '.icon.JPG'), ": merged_", i) 
+            print(img.replace('.JPG', '.icon.JPG'), ": merged_",donor,"_", i) 
     '''
     for merging_clusters in merged: #merging clusters are akways 2. The id of the cluster is always determined by the first day
         if merging_clusters[0] not in clusters:
@@ -421,20 +440,28 @@ def find_associations(days, day2clus2imgs, day2clus2emb):
 def cal_feature_extention(img, donors_id, day_number, donor, max_day, imgname2add):
     extention = []
     #commented out the followings to get rid of the info about which donor = one hot encoding
+    # donor one hot encoding
     #extention = np.zeros(len(donors_id))
     #index = donors_id.index(donor)
     #extention[index] = 1
     #extention = list(extention)
-    '''
     extention.append(day_number / max_day)
+    #image order
+    '''
     if '(' not in img:
         img_num = 0
     else:
         img_num = img.split('(')[1].split(')')[0]
     extention.append(int(img_num))
     '''
-    for x in imgname2add[img.split()[1].split('/')[-1]]:
-        extention.append(float(x)) #the part of the image name that is before the space
+    #ADDs
+    if '(' not in img:
+        for x in imgname2add[img.split('/')[-1].split('.')[0]]:
+            extention.append(float(x)) #the part of the image name that is before the space
+    else:
+        for x in imgname2add[img.split()[1].split('/')[-1]]:
+            extention.append(float(x)) #the part of the image name that is before the space
+    
     return extention
      
     
