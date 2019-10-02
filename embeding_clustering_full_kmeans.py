@@ -47,10 +47,16 @@ imgname2add = {}
 
 def key_func(x):
     # For some yesr line 2011 the year is 2 digits so the date format should ne %m%d%y but for others like 2015 it should be %m%d%Y
-    if '(' in x:     
-        return datetime.datetime.strptime(x.split('D_')[-1].split('(')[0].strip().replace('_',''), '%m%d%y')
-    else: 
-        return datetime.datetime.strptime(x.split('D_')[-1].split('.JPG')[0].strip().replace('_',''), '%m%d%y')
+    try:
+        if '(' in x:     
+            return datetime.datetime.strptime(x.split('D_')[-1].split('(')[0].strip().replace('_',''), '%m%d%y')
+        else: 
+            return datetime.datetime.strptime(x.split('D_')[-1].split('.')[0].strip().replace('_',''), '%m%d%y')
+    except:
+        print(x)
+        import bpython
+        bpython.embed(locals())
+        exit()
 
 def sort_dates(donors2imgs): #sorts the dates by getting a list of img_names for each donor and sorting that
     for key in donors2imgs:
@@ -123,16 +129,6 @@ def cluster(donor2img2embeding, donor2day2img):
     vectors = vectors / vectors.max(axis=0)
     #vectors_tsne = TSNE(n_components=2, perplexity=50, early_exaggeration=12.0, learning_rate=200.0, n_iter=4000, n_iter_without_progress=100, min_grad_norm=1e-07).fit_transform(vectors)
     #vectors_tsne = TSNE(n_components=2, perplexity=50, early_exaggeration=12.0, learning_rate=200.0, n_iter=4000, n_iter_without_progress=100, min_grad_norm=1e-07, metric=’euclidean’, init=’pca’, method=’barnes_hut’, angle=0.5).fit_transform(vectors)
-    ''' 
-    This is for generating data for parallax
-    i = 0
-    for j in vectors:
-        print(img_names[i])
-        print(j)
-        i = i + 1
-    exit()
-    '''
-    #num_clusters = find_cluster_num(vectors)
     ## kmeans:
     kmeans = KMeans(n_clusters = num_clusters)
     kmeans.fit(vectors)
@@ -142,21 +138,10 @@ def cluster(donor2img2embeding, donor2day2img):
     agglomerative = AgglomerativeClustering(n_clusters = num_clusters, linkage='single')
     agglomerative.fit(list(vectors))
     labels = agglomerative.labels_#predict(vectors)
-
     '''
 
-    '''
-    import bpython
-    bpython.embed(locals())
-    exit()
-    agglomerative = AgglomerativeClustering(n_clusters = num_clusters, linkage='single')
-    agglomerative.fit(list(vectors))
-    labels = agglomerative.labels_#predict(vectors)
-    '''
-
-    cluster_dist(labels, kmeans, vectors)
+    #cluster_dist(labels, kmeans, vectors)
     #score = silhouette_score(vectors, labels)
-    #print(score)
     '''
     ## SpectralClustering
     clustering = SpectralClustering(n_clusters= num_clusters, affinity='nearest_neighbors',assign_labels='kmeans')
@@ -191,7 +176,6 @@ def daily_clustering(donor2img2embeding, donor2day2img):
         kmeans.fit(vectors)
         labels = kmeans.predict(vectors)
         #score = silhouette_score(vectors, labels)
-        #print(score)
 
         for index, label in enumerate(labels):
             print(days_data[day][0][index] , ":" , day, "_", label)
@@ -202,7 +186,6 @@ def cluster_dist(labels, kmeans, vectors):
         dist_list = []
         for l2 in np.unique(labels):
             dist = distance.euclidean(kmeans.cluster_centers_[l1], kmeans.cluster_centers_[l2]) # find the distance between the centers
-            #print(l1, l2, dist)
             #dist_list.append(dist)
 
 
@@ -244,7 +227,6 @@ def daily_clustering_per_multidonor(donor2img2embeding, donor2day2img):
             labels = kmeans.predict(vectors)
             
             #score = silhouette_score(vectors, labels)
-            #print(score)
             cluster_ids = np.array(labels)
             clus2embs = {}
             clus2imgs = {}
@@ -262,6 +244,155 @@ def daily_clustering_per_multidonor(donor2img2embeding, donor2day2img):
     find_associations(days, day2clus2imgs, day2clus2emb, donor)# the donor is not needed realy in this case. That is for single donor merging
     return day2clus2emb
 
+def clustering_per_donor_per_stage(donor2img2embeding, donor2day2img):
+    for donor in donor2day2img:
+        day2clus2emb = {}#each cluster will have one vector which is the center/average of the ones belonging to it
+        day2clus2imgs = {} # each claster (key) would have a value of the lsit of image names belonging to it
+        days = list(donor2day2img[donor].keys())
+        days.sort()
+        multi_days_vecctors = []
+        multi_days_imgnames = []
+        all_centers_per_donor = []
+        all_clustered_imgs_per_donor = []
+
+        for day in days:
+            vectors = []
+            img_names = []
+            imgs = donor2day2img[donor][day]
+            for img in imgs:
+                vectors.append(donor2img2embeding[donor][img]) 
+                img_names.append(img.replace('JPG','icon.JPG'))
+
+            #vectors = np.array(vectors)
+            multi_days_vecctors.append(vectors)
+            multi_days_imgnames.append(img_names)
+
+        daily_vects = []
+        average_dist = []
+
+        for vects in multi_days_vecctors:
+            ave_vects = np.mean(np.array(vects), axis=0)
+            daily_vects.append(ave_vects)
+
+        new_vectors = []
+        new_imgnames = []
+
+        for i in range(len(daily_vects) - 1):#daily_vects = average of the vectors per day = one average vector per day
+            dist = distance.euclidean(daily_vects[i], daily_vects[i+1])
+            if len(average_dist) == 0:
+                average_dist.append(dist)
+            if np.abs(dist - np.mean(np.array(average_dist))) < 30:#np.mean(np.array(average_dist))/2: 
+                new_vectors.extend(v for v in multi_days_vecctors[i])
+                new_imgnames.extend(im for im in multi_days_imgnames[i])
+            else:
+                new_vectors.extend(v for v in multi_days_vecctors[i])
+                new_imgnames.extend(im for im in multi_days_imgnames[i])
+                
+                new_vectors = np.array(new_vectors)
+                new_vectors = new_vectors / new_vectors.max(axis=0)
+                '''
+                ######## kmeans ##########
+                kmeans = KMeans(n_clusters = num_clusters)
+                kmeans.fit(new_vectors)
+                labels = kmeans.predict(new_vectors)
+                '''
+
+                ######### Agglomerative ######
+                agglomerative = AgglomerativeClustering(n_clusters = num_clusters, linkage='single')
+                agglomerative.fit(list(vectors))
+                labels = agglomerative.labels_#predict(vectors)
+
+                cluster_ids = np.array(labels)
+                clus2embs = {}
+                clus2imgs = {}
+                for clus in range(num_clusters):
+                    clus_index = np.where(cluster_ids == clus)[0] #get the indices for the cluster id = clus
+                    ##### Agglo #### 
+                    clus_embs = itemgetter(*clus_index)(list(new_vectors)) #find all embedings for the cluster. it's tuple
+                    clus_embs_sum = reduce(lambda a, b: a+b, clus_embs) #get the average for the embedings for cluster = clus
+                    clus_embs_ave = clus_embs_sum / len(clus_embs)
+                    clus2embs[clus] = clus_embs_ave
+                    ### kmeans ####
+                    #clus2embs[clus] = kmeans.cluster_centers_[clus] # the center for clus
+                    temp = itemgetter(*clus_index)(new_imgnames)
+                    clus2imgs[clus] = list(temp) if type(temp) is tuple else [temp] #only images in clus 
+    
+                all_centers_per_donor.append(clus2embs) #each eleman is for one bin_
+                all_clustered_imgs_per_donor.append(clus2imgs)
+
+                #for index, label in enumerate(labels):
+                #    print(new_imgnames[index] , ":" ,donor,"_", i,"_", label)
+                new_vectors = []
+                average_dist = []
+                new_imgnames = []
+        
+
+        merges = []
+        num_breaks = len(all_centers_per_donor)
+        for bin_ in range(num_breaks - 1):
+            all_dists = []
+            for clus1 in range(num_clusters):
+                for clus2 in range(num_clusters):
+                    row = [] # row = clus1, clus2, distance
+                    try:
+                        dist = distance.euclidean(all_centers_per_donor[bin_][clus1], all_centers_per_donor[bin_ + 1][clus2])
+                    except KeyError: 
+                        print('KeyError')
+                        import bpython
+                        bpython.embed(locals())
+                        exit()
+                    row.append(clus1)
+                    row.append(clus2)
+                    row.append(dist) 
+                    all_dists.append(row)
+            seen1 = set()
+            seen2 = set()
+            merged = []
+
+            match_dists = []
+            #the following loop is to have a list of [x1,x2] called merged to say x1 got merged to x2 
+            for i, l in enumerate(sorted(all_dists, key=lambda x: x[2], reverse=False)):
+                if l[0] not in seen1 and l[1] not in seen2: 
+                    merged.append([l[0], l[1]])
+                    match_dists.append(l[2])
+                    seen1.add(l[0])
+                    seen2.add(l[1])
+            merges.append(merged)
+
+        def findNext(pair, bin_index):
+            if bin_index >= len(merges):
+                return []
+            else: 
+                for group in merges[bin_index]:
+                    if group[0] == pair[1]: 
+                        # found the associated pair
+                        return [group[1]] + findNext(group, bin_index + 1)
+
+        groups  = []
+        for i, pair in enumerate(merges[0]):
+            temp = pair + findNext(pair, 1)
+            # temp is a list [a, b, c, ...z] where its index is the bin_index and its values are cluster numbers
+
+            group = []#{'cluster': [], 'day': 0}
+            # group is a temporary super-cluster that is used to break the chains 
+
+            for bin_index, cluster in enumerate(temp):
+                # skip last one since it'll be out of bounds
+                group.append(cluster)
+                if bin_index == len(temp) - 1: 
+                    groups.append(group)
+                    continue
+
+        clusters = []
+        for group in groups:
+            images = []
+            for bin_index, cluster_index in enumerate(group): 
+                images += all_clustered_imgs_per_donor[bin_index][cluster_index]
+            clusters.append(sorted(images, key = key_func))
+        for i, imgs in enumerate(clusters):
+            for img in imgs:
+                print(img.replace('.JPG', '.icon.JPG'), ": merged_",donor,"_", i) 
+    return day2clus2emb
 ############################################################## 
 # This clusters images of one day per donor and then merges them
 ##############################################################
@@ -290,17 +421,7 @@ def daily_clustering_per_donor(donor2img2embeding, donor2day2img):
                 if day not in day2clus2emb:
                     day2clus2emb[day] = {}
                     day2clus2imgs[day] = {}
-                ''' 
-                sum_of_squared_distances = []
-                K = range(2,15)
-                for k in K:
-                    km = KMeans(n_clusters=k)
-                    km = km.fit(vectors)
-                    sum_of_squared_distances.append(km.inertia_)
-                print(sum_of_squared_distances)
-                x = range(1, len(sum_of_squared_distances)+1)
-                kn = KneeLocator(x, sum_of_squared_distances, curve='convex', direction='decreasing')
-                print(kn.knee)
+
                 '''
                 #### KMeans ###########
                 kmeans = KMeans(n_clusters = num_clusters)
@@ -312,7 +433,6 @@ def daily_clustering_per_donor(donor2img2embeding, donor2day2img):
                 agglomerative.fit(list(vectors))
                 labels = agglomerative.labels_#predict(vectors)
 
-                '''
                 #score = silhouette_score(vectors, labels)
                 #print(score)
                 cluster_ids = np.array(labels)
@@ -320,13 +440,13 @@ def daily_clustering_per_donor(donor2img2embeding, donor2day2img):
                 clus2imgs = {}
                 for clus in range(num_clusters):
                     clus_index = np.where(cluster_ids == clus)[0] #get the indices for the cluster id = clus
-                    '''
+
                     clus_embs = itemgetter(*clus_index)(list(vectors)) #find all embedings for the cluster. it's tuple
                     clus_embs_sum = reduce(lambda a, b: a+b, clus_embs) #get the average for the embedings for cluster = clus
                     clus_embs_ave = clus_embs_sum / len(clus_embs)
                     clus2embs[clus] = clus_embs_ave
-                    '''
-                    clus2embs[clus] = kmeans.cluster_centers_[clus]
+
+                    #clus2embs[clus] = kmeans.cluster_centers_[clus]
                     day2clus2emb[day] = clus2embs
                     temp = itemgetter(*clus_index)(imgs)
                     clus2imgs[clus] = list(temp) if type(temp) is tuple else [temp]
@@ -343,8 +463,7 @@ def find_associations(days, day2clus2imgs, day2clus2emb, donor):
     days.sort()
     num_days = len(days)
     merges = []
-    day = days[0]
-    
+    #day = days[0]
 
     all_day_dists = {}
     all_match_dists = []
@@ -352,9 +471,6 @@ def find_associations(days, day2clus2imgs, day2clus2emb, donor):
     for index in range(num_days - 1):
         day = days[index]
         next_day = days[index + 1]
-        #if they don't have image for the next 40 days it must be only bones
-        #if next_day - day > 40:
-        #    break
         all_dists = []
         for clus1 in range(num_clusters):
             for clus2 in range(num_clusters):
@@ -382,6 +498,7 @@ def find_associations(days, day2clus2imgs, day2clus2emb, donor):
         all_day_dists[index] = {(x[0], x[1]): x[2] for x in all_dists}
 
         match_dists = []
+        #the following loop is to have a list of [x1,x2] called merged to say x1 got merged to x2 
         for i, l in enumerate(sorted(all_dists, key=lambda x: x[2], reverse=False)):
             if l[0] not in seen1 and l[1] not in seen2: 
                 merged.append([l[0], l[1]])
@@ -392,7 +509,19 @@ def find_associations(days, day2clus2imgs, day2clus2emb, donor):
         merges.append(merged)
 
     std_ = np.std(np.array(all_match_dists))
-
+    '''
+    import bpython
+    bpython.embed(locals())
+    exit()
+    def decay_based_merge(std_, all_match_dists, day2clus2emb, day2clus2imgs)
+        vectors = []
+        l = len(all_match_dists)
+        for i in range(l-1):
+        for i, d in enumerate(days[:-1]):
+            if (sum(all_match_dists[i+1])/len(all_match_dists[i+1])- sum(all_match_dists[i])/len(all_match_dists[i])) < std_:
+            vectors.extend(day2clus2emb[d][c] for c in cluster_name/ )
+                        
+    '''
     def findNext(pair, day_index):
         if day_index >= len(merges):
             return []
@@ -406,7 +535,11 @@ def find_associations(days, day2clus2imgs, day2clus2emb, donor):
     for i, pair in enumerate(merges[0]):
         day = 0
         temp = pair + findNext(pair, 1)
+        # temp is a list [a, b, c, ...z] where its index is the day and its values are cluster numbers
+
         group = {'cluster': [], 'day': 0}
+        # group is a temporary super-cluster that is used to break the chains 
+
         for day_index, cluster in enumerate(temp):
             # skip last one since it'll be out of bounds
             group['cluster'].append(cluster)
@@ -416,9 +549,9 @@ def find_associations(days, day2clus2imgs, day2clus2emb, donor):
 
             next_cluster = temp[day_index + 1]
             _distance = all_day_dists[day_index][(cluster, next_cluster)]
-            if _distance > std_: 
+            if _distance > 2*std_: 
                 groups.append(group)
-                group = {'cluster': [], 'day': day_index} 
+                group = {'cluster': [], 'day': day_index + 1} 
 
         #groups.append(temp)
     clusters = []
@@ -461,7 +594,6 @@ def cal_feature_extention(img, donors_id, day_number, donor, max_day, imgname2ad
     else:
         for x in imgname2add[img.split()[1].split('/')[-1]]:
             extention.append(float(x)) #the part of the image name that is before the space
-    
     return extention
      
     
@@ -487,7 +619,9 @@ with open(ADD_file, 'r') as add_file:
     for row in content:
         row = row[0].split(',')
         name = row[0]
-        ADD = ast.literal_eval("[" + row[1].strip().replace(' ', ',') + "]") # this should be a list of temp, humadity and wind ADD
+        add = row[1].strip()
+        add = add.replace(' ', ',')
+        ADD = ast.literal_eval("[" + add + "]") # this should be a list of temp, humadity and wind ADD
         imgname2add[name] = ADD
     
 
@@ -518,12 +652,11 @@ with open(embedings_file, 'r') as csv_file:
         if modify == 'true':
             donors2img2embed = modify_features(donors2img2embed, donor2day2imgs)
         if merge_type =='single': #only one donor
-            day2clus2emb = daily_clustering_per_donor(donors2img2embed, donor2day2imgs)
+            day2clus2emb = clustering_per_donor_per_stage(donors2img2embed, donor2day2imgs) #daily_clustering_per_donor      
         if merge_type == 'multi': # multiple donor
             day2clus2emb = daily_clustering_per_multidonor(donors2img2embed, donor2day2imgs)
 
 
-       
     else:
         if modify == 'true':
             donors2img2embed = modify_features(donors2img2embed, donor2day2imgs)
