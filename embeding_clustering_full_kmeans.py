@@ -119,36 +119,26 @@ def find_cluster_num(vectors):
     return num_clusters
 
 def cluster(donor2img2embeding, donor2day2img):
-    img_names = []
-    vectors = []
     for donor in donor2img2embeding:
+        img_names = []
+        vectors = []
         for img in donor2img2embeding[donor]:
             img_names.append(img.replace('JPG','icon.JPG').replace(' ',' '))
             vectors.append(donor2img2embeding[donor][img])
-    vectors = np.array(vectors)
-    vectors = vectors / vectors.max(axis=0)
-    #vectors_tsne = TSNE(n_components=2, perplexity=50, early_exaggeration=12.0, learning_rate=200.0, n_iter=4000, n_iter_without_progress=100, min_grad_norm=1e-07).fit_transform(vectors)
-    #vectors_tsne = TSNE(n_components=2, perplexity=50, early_exaggeration=12.0, learning_rate=200.0, n_iter=4000, n_iter_without_progress=100, min_grad_norm=1e-07, metric=’euclidean’, init=’pca’, method=’barnes_hut’, angle=0.5).fit_transform(vectors)
-    ## kmeans:
-    kmeans = KMeans(n_clusters = num_clusters)
-    kmeans.fit(vectors)
-    labels = kmeans.predict(vectors)
-    '''
-    ######### Agglomerative ######
-    agglomerative = AgglomerativeClustering(n_clusters = num_clusters, linkage='single')
-    agglomerative.fit(list(vectors))
-    labels = agglomerative.labels_#predict(vectors)
-    '''
-
-    #cluster_dist(labels, kmeans, vectors)
-    #score = silhouette_score(vectors, labels)
-    '''
-    ## SpectralClustering
-    clustering = SpectralClustering(n_clusters= num_clusters, affinity='nearest_neighbors',assign_labels='kmeans')
-    labels = clustering.fit_predict(vectors_tsne)
-    '''
-    for index, label in enumerate(labels):
-        print(img_names[index] , ":" ,  label)
+        vectors = np.array(vectors)
+        vectors = vectors / vectors.max(axis=0)
+        '''
+        ## kmeans:
+        kmeans = KMeans(n_clusters = num_clusters)
+        kmeans.fit(vectors)
+        labels = kmeans.predict(vectors)
+        '''
+        ######### Agglomerative ######
+        agglomerative = AgglomerativeClustering(n_clusters = num_clusters, linkage='single')
+        agglomerative.fit(list(vectors))
+        labels = agglomerative.labels_#predict(vectors)
+        for index, label in enumerate(labels):
+            print(img_names[index] , ":" , donor, "_",  label)
 
 def daily_clustering(donor2img2embeding, donor2day2img):
     img_names = []
