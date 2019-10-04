@@ -18,6 +18,7 @@ import argparse
 from operator import itemgetter 
 from functools import reduce
 from scipy.spatial import distance
+import math
 #from kneed import KneeLocator
 ## to use itemgetter(the indices seperated by ,)(the list name)
 
@@ -127,7 +128,6 @@ def cluster(donor2img2embeding, donor2day2img):
             vectors.append(donor2img2embeding[donor][img])
         vectors = np.array(vectors)
         vectors = vectors / vectors.max(axis=0)
-        '''
         ## kmeans:
         kmeans = KMeans(n_clusters = num_clusters)
         kmeans.fit(vectors)
@@ -137,6 +137,7 @@ def cluster(donor2img2embeding, donor2day2img):
         agglomerative = AgglomerativeClustering(n_clusters = num_clusters, linkage='single')
         agglomerative.fit(list(vectors))
         labels = agglomerative.labels_#predict(vectors)
+    '''
         for index, label in enumerate(labels):
             print(img_names[index] , ":" , donor, "_",  label)
 
@@ -234,6 +235,189 @@ def daily_clustering_per_multidonor(donor2img2embeding, donor2day2img):
     find_associations(days, day2clus2imgs, day2clus2emb, donor)# the donor is not needed realy in this case. That is for single donor merging
     return day2clus2emb
 
+def streaming_cluster(donor2img2embeding, donor2day2img):
+    n_clusters = 7
+
+    # For each donor
+    for donor in donor2day2img:
+        days = list(donor2day2img[donor].keys())
+        days.sort()
+
+        # Window information
+        start = 0
+        window_size = 3
+        end = start + window_size
+
+        # Store all window clusters
+        window_clusters_imgs = []
+        
+        while end < len(days):
+            img_names = []
+            embeddings = []
+            # For every day in our window
+            for day_index in range(start, end): 
+                day = days[day_index]
+                # Grab all the features in this window for this donor
+                for img in donor2day2img[donor][day]:
+                    img_names.append(img)
+                    embeddings.append(donor2img2embeding[donor][img])
+
+            embeddings = np.array(embeddings)
+            embeddings = embeddings / embeddings.max(axis = 0)
+            kmeans = SpectralClustering(n_clusters = n_clusters, affinity='nearest_neighbors', assign_labels='kmeans')
+            labels = kmeans.fit_predict(embeddings)
+            #labels = kmeans.predict(embeddings)
+
+            window_cluster = {}
+            for i, label in enumerate(labels):
+                if label in window_cluster: 
+                    window_cluster[label].append(img_names[i])
+                else: 
+                    window_cluster[label] = [img_names[i]]
+
+            window_clusters_imgs.append(window_cluster)
+
+            start += 1
+            end = start + window_size
+
+        # Merge the clusters
+        i = 0
+        merges = []
+        while i < len(window_clusters_imgs) - 1:
+            merged = []
+            first_clusters = window_clusters_imgs[i] # For the ith window
+            second_clusters = window_clusters_imgs[i + 1] # For the (i + 1)th window
+            for c1_index, c1_imgs in first_clusters.items(): 
+                max_overlap = 0
+                max_overlap_index = -1
+                for c2_index, c2_imgs in second_clusters.items():
+                    overlap = len(set(c1_imgs).intersection(set(c2_imgs)))
+                    if overlap > max_overlap: 
+                        max_overlap = overlap
+                        max_overlap_index = c2_index
+            
+                '''
+                if max_overlap_index == -1:
+                    import bpython
+                    bpython.embed(locals())
+                    exit()
+                '''
+
+                merged.append([c1_index , max_overlap_index])
+            merges.append(merged)
+            i += 1
+            
+            
+        def findNext(pair, bin_index):
+            if bin_index >= len(merges):
+                return []
+            else: 
+                for group in merges[bin_index]:
+                    if group[0] == pair[1]: 
+                        # found the associated pair
+                        return [group[1]] + findNext(group, bin_index + 1)
+        groups  = []
+
+        import bpython
+        bpython.embed(locals())
+
+        for i, pair in enumerate(merges[0]):
+            temp = pair + findNext(pair, 1)
+            # temp is a list [a, b, c, ...z] where its index is the bin_index and its values are cluster numbers
+
+            group = []#{'cluster': [], 'day': 0}
+            # group is a temporary super-cluster that is used to break the chains 
+
+            for window_index, cluster in enumerate(temp):
+                # skip last one since it'll be out of bounds
+                group.append(cluster)
+                if window_index == len(temp) - 1: 
+                    groups.append(group)
+
+        clusters = []
+        for group in groups:
+            images = []
+            for window_index, cluster_index in enumerate(group): 
+                images += window_clusters_imgs[window_index][cluster_index]
+            clusters.append(sorted(images, key = key_func))
+        for i, imgs in enumerate(clusters):
+            for img in imgs:
+                print(img, ":",donor,"_", i) 
+
+def cosine_similarity(v1,v2):
+    "compute cosine similarity of v1 to v2: (v1 dot v2)/{||v1||*||v2||)"
+    sumxx, sumxy, sumyy = 0, 0, 0
+    for i in range(len(v1)):
+        x = v1[i]; y = v2[i]
+        sumxx += x*x
+        sumyy += y*y
+        sumxy += x*y
+    return sumxy/math.sqrt(sumxx*sumyy)
+
+
+
+def sequence_finder(donor2img2embeding, donor2day2img):
+
+    for donor in donor2img2embeding:
+        if donor == 'UT16-13D':
+            days = list(donor2day2img[donor].keys())
+            days.sort()
+            all_embs = donor2img2embeding[donor]
+            all_sims = {} #key = imgs, value = [[im1, dist],im2, dit[],...]
+            all_matches = {}
+
+            window = 2
+            for i in range(window, len(days)-window):
+                imgs = donor2day2img[donor][days[i]] # images for day = days[i]
+                for img in imgs:
+                    emb = []
+                    if len(all_sims) == 0: #the image to start with
+                        if img != '/home/mousavi/da1/icputrd/arf/mean.js/public/2013//UT16-13D/Daily Photos//UT16-13D_03_22_13 (33).JPG':
+                            continue
+                        else:
+                            emb = all_embs['/home/mousavi/da1/icputrd/arf/mean.js/public/2013//UT16-13D/Daily Photos//UT16-13D_03_22_13 (33).JPG']
+                    else:
+                        for seen in all_sims:
+                            for x in all_sims[seen]:
+                                if img ==  x[0]: # if it is one of the matched ones
+                                    emb = all_embs[img] 
+                    daily_sims = []
+                    if len(emb) > 0:
+                        for w in range(1, window + 1):
+                            day_before_imgs = donor2day2img[donor][days[i-w]]
+                            day_after_imgs = donor2day2img[donor][days[i+w]]
+                            similarities = []
+                            for day_before_img in day_before_imgs:
+                                emb2 = all_embs[day_before_img] 
+                                sim = cosine_similarity(emb, emb2)
+                                similarities.append([day_before_img, sim])
+
+                            similarities = sorted(similarities, key=lambda x: x[1], reverse=True)
+                            for ind, pair in enumerate(similarities):
+                                if ind == 0 and pair[1] > 0.55:
+                                    daily_sims.append(pair)
+                                elif pair[1] > 0.9:
+                                    daily_sims.append(pair)
+
+                            similarities = []
+                            for day_after_img in day_after_imgs:
+                                emb2 = all_embs[day_after_img] 
+                                sim = cosine_similarity(emb, emb2)
+                                similarities.append([day_after_img, sim])
+
+                            similarities = sorted(similarities, key=lambda x: x[1], reverse=True)
+                            for ind, pair in enumerate(similarities):
+                                if ind == 0 and pair[1] > 0.55:
+                                    daily_sims.append(pair)
+                                elif pair[1] > 0.9:
+                                    daily_sims.append(pair)
+
+                    if len(daily_sims) != 0:
+                        all_sims[img] = daily_sims
+    for match in all_sims:
+        for img in all_sims[match]:
+            print(img[0])
+
 def clustering_per_donor_per_stage(donor2img2embeding, donor2day2img):
     for donor in donor2day2img:
         day2clus2emb = {}#each cluster will have one vector which is the center/average of the ones belonging to it
@@ -271,7 +455,7 @@ def clustering_per_donor_per_stage(donor2img2embeding, donor2day2img):
             dist = distance.euclidean(daily_vects[i], daily_vects[i+1])
             if len(average_dist) == 0:
                 average_dist.append(dist)
-            if np.abs(dist - np.mean(np.array(average_dist))) < 30:#np.mean(np.array(average_dist))/2: 
+            if np.abs(dist - np.mean(np.array(average_dist))) < np.mean(np.array(average_dist))/(i+1): 
                 new_vectors.extend(v for v in multi_days_vecctors[i])
                 new_imgnames.extend(im for im in multi_days_imgnames[i])
             else:
@@ -280,30 +464,32 @@ def clustering_per_donor_per_stage(donor2img2embeding, donor2day2img):
                 
                 new_vectors = np.array(new_vectors)
                 new_vectors = new_vectors / new_vectors.max(axis=0)
-                '''
                 ######## kmeans ##########
                 kmeans = KMeans(n_clusters = num_clusters)
                 kmeans.fit(new_vectors)
                 labels = kmeans.predict(new_vectors)
-                '''
 
                 ######### Agglomerative ######
+                '''
                 agglomerative = AgglomerativeClustering(n_clusters = num_clusters, linkage='single')
                 agglomerative.fit(list(vectors))
                 labels = agglomerative.labels_#predict(vectors)
+                '''
 
                 cluster_ids = np.array(labels)
                 clus2embs = {}
                 clus2imgs = {}
                 for clus in range(num_clusters):
                     clus_index = np.where(cluster_ids == clus)[0] #get the indices for the cluster id = clus
+                    '''
                     ##### Agglo #### 
                     clus_embs = itemgetter(*clus_index)(list(new_vectors)) #find all embedings for the cluster. it's tuple
                     clus_embs_sum = reduce(lambda a, b: a+b, clus_embs) #get the average for the embedings for cluster = clus
                     clus_embs_ave = clus_embs_sum / len(clus_embs)
                     clus2embs[clus] = clus_embs_ave
+                    '''
                     ### kmeans ####
-                    #clus2embs[clus] = kmeans.cluster_centers_[clus] # the center for clus
+                    clus2embs[clus] = kmeans.cluster_centers_[clus] # the center for clus
                     temp = itemgetter(*clus_index)(new_imgnames)
                     clus2imgs[clus] = list(temp) if type(temp) is tuple else [temp] #only images in clus 
     
@@ -381,7 +567,7 @@ def clustering_per_donor_per_stage(donor2img2embeding, donor2day2img):
             clusters.append(sorted(images, key = key_func))
         for i, imgs in enumerate(clusters):
             for img in imgs:
-                print(img.replace('.JPG', '.icon.JPG'), ": merged_",donor,"_", i) 
+                print(img, ": merged_",donor,"_", i) 
     return day2clus2emb
 ############################################################## 
 # This clusters images of one day per donor and then merges them
@@ -642,7 +828,7 @@ with open(embedings_file, 'r') as csv_file:
         if modify == 'true':
             donors2img2embed = modify_features(donors2img2embed, donor2day2imgs)
         if merge_type =='single': #only one donor
-            day2clus2emb = clustering_per_donor_per_stage(donors2img2embed, donor2day2imgs) #daily_clustering_per_donor      
+            day2clus2emb = sequence_finder(donors2img2embed, donor2day2imgs) #daily_clustering_per_donor      
         if merge_type == 'multi': # multiple donor
             day2clus2emb = daily_clustering_per_multidonor(donors2img2embed, donor2day2imgs)
 
