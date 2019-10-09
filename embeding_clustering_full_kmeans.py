@@ -23,31 +23,9 @@ import math
 ## to use itemgetter(the indices seperated by ,)(the list name)
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--embeding_file', type = str)
-parser.add_argument('--modify', type = str) #True or False
-parser.add_argument('--daily', type = str) #True or False
-parser.add_argument('--cluster_number') # A number
-parser.add_argument('--method') # merge/not-merge
-parser.add_argument('--merge_type') #single or multi (only one donors or multi)
-parser.add_argument('--ADD_file') # the file that include the image names (no space, (, ), and JPG) as the first column and the ADDs as the second column
-
-args = parser.parse_args()
-
-embedings_file = args.embeding_file #sys.argv[1] # This should be a pca version the embedings
-modify = args.modify 
-Daily = args.daily 
-num_clusters = int(args.cluster_number)
-method = args.method
-merge_type = args.merge_type
-ADD_file = args.ADD_file
-
-donors2imgs = {}
-donors2img2embed = {}
-imgname2add = {}
 
 def key_func(x):
-    # For some yesr line 2011 the year is 2 digits so the date format should ne %m%d%y but for others like 2015 it should be %m%d%Y
+    # For some year like 2011 the year is 2 digits so the date format should ne %m%d%y but for others like 2015 it should be %m%d%Y
     try:
         if '(' in x:     
             return datetime.datetime.strptime(x.split('D_')[-1].split('(')[0].strip().replace('_',''), '%m%d%y')
@@ -296,12 +274,6 @@ def streaming_cluster(donor2img2embeding, donor2day2img):
                         max_overlap = overlap
                         max_overlap_index = c2_index
             
-                '''
-                if max_overlap_index == -1:
-                    import bpython
-                    bpython.embed(locals())
-                    exit()
-                '''
 
                 merged.append([c1_index , max_overlap_index])
             merges.append(merged)
@@ -354,70 +326,204 @@ def cosine_similarity(v1,v2):
         sumxy += x*y
     return sumxy/math.sqrt(sumxx*sumyy)
 
+def overlap_merge(all_sims):
+    no_more_merge = False
+    while no_more_merge == False:
+        merged_dict = {}
+        seen = []
+        all_sims_keys = list(all_sims.keys())
+        no_more_merge = True
+        for key1 in all_sims_keys:
+            if key1 not in seen:
+                if key1 not in merged_dict :
+                    merged_dict[key1] = list(set(all_sims[key1]))#to remove the duplicates
+                for key2 in all_sims_keys:
+                    if key1 != key2:
+                        intersect = len(set(all_sims[key1]).intersection(set(all_sims[key2])))
+                        if intersect != 0:
+                            no_more_merge = False
+                            merged_dict[key1].extend(list(set(all_sims[key2])))
+                            merged_dict[key1] = sorted(merged_dict[key1], key = key_func)
+                            seen.append(key2)
+        all_sims = merged_dict
+    return all_sims 
+#########################################################################
+def find_tail_head(all_sims, key1, key2):
+    list1 = sorted(all_sims[key1], key = key_func)
+    list2 = sorted(all_sims[key2], key = key_func)
+    sequence1 = []
+    sequence2 = []
+    if len(list1) > 0 and len(list2) > 0:
+        if convert_to_time(list1[0]) <  convert_to_time(list2[0]) and \
+            convert_to_time(list1[-1]) >  convert_to_time(list2[0]):
+
+            sequence1 = list1
+            sequence2 = list2        
+        else:
+            sequence1 = list2
+            sequence2 = list1        
+
+        head = tail = []
+        
+        sequence1_times = [x.split("os//")[1].split()[0] for x in sequence1]
+        sequence2_times = [x.split("os//")[1].split()[0] for x in sequence2]
+        time_overlap = list(set(sequence1_times).intersection(set(sequence1_times)))
+
+        tail = [x for x in sequence1 if x.split("os//")[1].split()[0] in time_overlap]
+        head = [x for x in sequence2 if x.split("os//")[1].split()[0] in time_overlap]
+
+        sequence1 = tail
+        sequence2 = head
+
+        tail_size = min(len(sequence1), len(sequence2))
+
+        if tail_size == 1:
+            tail = [sequence1[-1]]
+            head = [sequence2[0]]
+        else:
+            tail = sequence1[-tail_size:]
+            head = sequence2[:tail_size]
+        '''
+        min_size = min(len(sequence1), len(sequence2))
+        tail_size = 0
+        if len(sequence1) == min_size and min_size < 6:
+            tail = sequence1
+            tail_size = len(sequence1)
+            head = sequence2[:tail_size] 
+            ## the head of the target sequence to see if merge
+
+        
+        if len(sequence2)  == min_size and min_size < 6:
+            head = sequence2
+            tail_size = len(sequence2)
+            tail = sequence1[-tail_size:] # the tail of the base sequence
+
+        if len(head) == 0 and len(tail) == 0:     
+            tail_size = min(len(sequence1), len(sequence2))// 3 # only one third
+            tail = sequence1[-tail_size:] # the tail of the base sequence
+            head = sequence2[:tail_size] ## the head of the target sequence to see if merge
+        '''
+    return head, tail, tail_size 
+    
+##########################################################################
+def similarity_merge(all_sims, donor2img2embeding, donor2day2img, donor):
+    no_more_merge = False
+    while no_more_merge == False:
+        merged_dict = {}
+        seen = []
+        all_sims_keys = list(all_sims.keys())
+        no_more_merge = True
+
+        for key1 in all_sims_keys:
+            if key1 in seen:
+                continue
+
+            if key1 not in merged_dict :
+                # to remove the duplicates
+                merged_dict[key1] = list(set(all_sims[key1]))
+
+            one2nsimi = []
+            for key2 in all_sims_keys:
+                if all_sims_keys.index(key2) <= all_sims_keys.index(key1):
+                    continue
+                head, tail, tail_size = find_tail_head(all_sims, key1, key2)
+                if tail_size >= 1 :
+                    similarity = []
+                    for img_index in range(tail_size):
+                        emb1 = donor2img2embeding[donor][tail[img_index]]
+                        emb2 = donor2img2embeding[donor][head[img_index]]
+                        simi = cosine_similarity(emb1, emb2)
+                        similarity.append(simi)
+                    sub_seq_simi = sum(similarity) / tail_size
+                    one2nsimi.append([key2,sub_seq_simi])
+            if len(one2nsimi) > 0:
+                one2nsimi = sorted(one2nsimi, key=lambda x: x[1], reverse=True)
+                val = max(one2nsimi[0][1], 0.5)
+                if one2nsimi[0][1] >= val:
+                    #one2nsimi.append([key2,sub_seq_simi])
+                    no_more_merge = False
+                    merged_dict[key1].extend(list(set(all_sims[one2nsimi[0][0]])))
+                    merged_dict[key1] = sorted(merged_dict[key1], key = key_func)
+                    seen.append(one2nsimi[0][0])
+        all_sims = merged_dict
+    print_(merged_dict, donor)
+
+####################################################################
+def add_to_similarity_dict(all_sims, similarities, key):#, ratio):
+    similarities = sorted(similarities, key=lambda x: x[1], reverse=True)
+    max_ = similarities[0][1]
+    threshold = max(0.99 * max_, 0.40)
+    for ind, pair in enumerate(similarities):
+        if pair[1] >= threshold:
+            if key not in all_sims:
+                all_sims[key] = []
+            all_sims[key].append(pair[0])
+    return all_sims
 
 
+##################################################################
+def print_(all_sims, donor):
+    label = 0
+    for key in all_sims:
+        label = label + 1
+        for img in all_sims[key]:
+            temp = img.replace('JPG', 'icon.JPG: ')
+            print(temp + donor + "_" + str(label))
+
+#################################################################
 def sequence_finder(donor2img2embeding, donor2day2img):
 
     for donor in donor2img2embeding:
-        if donor == 'UT16-13D':
-            days = list(donor2day2img[donor].keys())
-            days.sort()
-            all_embs = donor2img2embeding[donor]
-            all_sims = {} #key = imgs, value = [[im1, dist],im2, dit[],...]
-            all_matches = {}
+        #if donor == 'UT16-13D':
+        days = list(donor2day2img[donor].keys())
+        days.sort()
+        all_embs = donor2img2embeding[donor]
+        all_sims = {} #key = imgs, value = [[im1, dist],im2, dit[],...]
 
-            window = 2
-            for i in range(window, len(days)-window):
-                imgs = donor2day2img[donor][days[i]] # images for day = days[i]
-                for img in imgs:
-                    emb = []
-                    if len(all_sims) == 0: #the image to start with
-                        if img != '/home/mousavi/da1/icputrd/arf/mean.js/public/2013//UT16-13D/Daily Photos//UT16-13D_03_22_13 (33).JPG':
-                            continue
-                        else:
-                            emb = all_embs['/home/mousavi/da1/icputrd/arf/mean.js/public/2013//UT16-13D/Daily Photos//UT16-13D_03_22_13 (33).JPG']
-                    else:
-                        for seen in all_sims:
-                            for x in all_sims[seen]:
-                                if img ==  x[0]: # if it is one of the matched ones
-                                    emb = all_embs[img] 
-                    daily_sims = []
-                    if len(emb) > 0:
-                        for w in range(1, window + 1):
-                            day_before_imgs = donor2day2img[donor][days[i-w]]
-                            day_after_imgs = donor2day2img[donor][days[i+w]]
-                            similarities = []
-                            for day_before_img in day_before_imgs:
-                                emb2 = all_embs[day_before_img] 
-                                sim = cosine_similarity(emb, emb2)
-                                similarities.append([day_before_img, sim])
+        window = 5
+        for i in range(window, len(days)-window):
+            imgs = donor2day2img[donor][days[i]] # images for day = days[i]
 
-                            similarities = sorted(similarities, key=lambda x: x[1], reverse=True)
-                            for ind, pair in enumerate(similarities):
-                                if ind == 0 and pair[1] > 0.55:
-                                    daily_sims.append(pair)
-                                elif pair[1] > 0.9:
-                                    daily_sims.append(pair)
+            for img in imgs:
+                emb = all_embs[img]
+                key = img
+                for seen in all_sims:
+                    for x in all_sims[seen]:
+                        if img ==  x: # if it is one of the matched ones
+                            key = seen
+                    
+                day_current_imgs = donor2day2img[donor][days[i]]
+                similarities = []
+                for day_current_img in day_current_imgs:
+                    emb2 = all_embs[day_current_img] 
+                    sim = cosine_similarity(emb, emb2)
+                    similarities.append([day_current_img, sim])
+                all_sims = add_to_similarity_dict(all_sims, similarities, key)
 
-                            similarities = []
-                            for day_after_img in day_after_imgs:
-                                emb2 = all_embs[day_after_img] 
-                                sim = cosine_similarity(emb, emb2)
-                                similarities.append([day_after_img, sim])
+                for w in range(1, window + 1):
+                    day_before_imgs = donor2day2img[donor][days[i-w]]
+                    day_after_imgs = donor2day2img[donor][days[i+w]]
+                    similarities = []
+                    for day_before_img in day_before_imgs:
+                        emb2 = all_embs[day_before_img] 
+                        sim = cosine_similarity(emb, emb2)
+                        similarities.append([day_before_img, sim])
+                    all_sims = add_to_similarity_dict(all_sims, similarities, key)
 
-                            similarities = sorted(similarities, key=lambda x: x[1], reverse=True)
-                            for ind, pair in enumerate(similarities):
-                                if ind == 0 and pair[1] > 0.55:
-                                    daily_sims.append(pair)
-                                elif pair[1] > 0.9:
-                                    daily_sims.append(pair)
+                    similarities = []
+                    for day_after_img in day_after_imgs:
+                        emb2 = all_embs[day_after_img] 
+                        sim = cosine_similarity(emb, emb2)
+                        similarities.append([day_after_img, sim])
+                    all_sims = add_to_similarity_dict(all_sims, similarities, key) 
 
-                    if len(daily_sims) != 0:
-                        all_sims[img] = daily_sims
-    for match in all_sims:
-        for img in all_sims[match]:
-            print(img[0])
+        #print_(all_sims, donor)
+        all_sims = overlap_merge(all_sims)
+        print_(all_sims, donor)
 
+        #similarity_merge(all_sims, donor2img2embeding, donor2day2img, donor)
+
+###############################################################################
 def clustering_per_donor_per_stage(donor2img2embeding, donor2day2img):
     for donor in donor2day2img:
         day2clus2emb = {}#each cluster will have one vector which is the center/average of the ones belonging to it
@@ -685,19 +791,7 @@ def find_associations(days, day2clus2imgs, day2clus2emb, donor):
         merges.append(merged)
 
     std_ = np.std(np.array(all_match_dists))
-    '''
-    import bpython
-    bpython.embed(locals())
-    exit()
-    def decay_based_merge(std_, all_match_dists, day2clus2emb, day2clus2imgs)
-        vectors = []
-        l = len(all_match_dists)
-        for i in range(l-1):
-        for i, d in enumerate(days[:-1]):
-            if (sum(all_match_dists[i+1])/len(all_match_dists[i+1])- sum(all_match_dists[i])/len(all_match_dists[i])) < std_:
-            vectors.extend(day2clus2emb[d][c] for c in cluster_name/ )
-                        
-    '''
+
     def findNext(pair, day_index):
         if day_index >= len(merges):
             return []
@@ -790,54 +884,78 @@ def modify_features(donors2img2embed, donor2day2imgs):
                 donors2img2embed[donor][img].extend(extention)
     return donors2img2embed
     
-with open(ADD_file, 'r') as add_file:
-    content = csv.reader(add_file, delimiter = '\n')
-    for row in content:
-        row = row[0].split(',')
-        name = row[0]
-        add = row[1].strip()
-        add = add.replace(' ', ',')
-        ADD = ast.literal_eval("[" + add + "]") # this should be a list of temp, humadity and wind ADD
-        imgname2add[name] = ADD
-    
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--embeding_file', type = str)
+    parser.add_argument('--modify', type = str) #True or False
+    parser.add_argument('--daily', type = str) #True or False
+    parser.add_argument('--cluster_number') # A number
+    parser.add_argument('--method') # merge/not-merge
+    parser.add_argument('--merge_type') #single or multi (only one donors or multi)
+    parser.add_argument('--ADD_file') # the file that include the image names (no space, (, ), and JPG) as the first column and the ADDs as the second column
 
-with open(embedings_file, 'r') as csv_file:
-    data = csv.reader(csv_file,delimiter = '\n')
-    vectors = []
-    for row in data:
-        row = row[0]
-        row= row.split('JPG')
-        img_name = row[0] + 'JPG'
-        embeding = row[1].strip()
-        embeding = embeding.replace(' ', ',')
-        embeding = ast.literal_eval("[" + embeding[1:-1] + "]") # this embeding is a list now
-        donor_id = img_name.split('/Daily')[0].split('/')[-1]
-        if donor_id not in donors2img2embed and donor_id not in donors2imgs:
-            donors2img2embed[donor_id] = {} 
-            donors2imgs[donor_id] = [] # a list for all of the images belonging to the same donor
-        donors2img2embed[donor_id][img_name] = embeding 
-        # this a dictionary with each donor_id as keys and values are another dictionary
-        # with keys being an image and the values being the feature vector for that imag
+    args = parser.parse_args()
 
-        donors2imgs[donor_id].append(img_name)
+    embedings_file = args.embeding_file #sys.argv[1] # This should be a pca version the embedings
+    modify = args.modify 
+    Daily = args.daily 
+    num_clusters = int(args.cluster_number)
+    method = args.method
+    merge_type = args.merge_type
+    ADD_file = args.ADD_file
 
-    donors2imgs_sorted = sort_dates(donors2imgs) # this sorts the images for a donor based on their dates
-    donor2day2imgs = cal_day_from_deth(donors2imgs_sorted)
+    donors2imgs = {}
+    donors2img2embed = {}
+    imgname2add = {}
 
-    if method == 'merge':
-        if modify == 'true':
-            donors2img2embed = modify_features(donors2img2embed, donor2day2imgs)
-        if merge_type =='single': #only one donor
-            day2clus2emb = sequence_finder(donors2img2embed, donor2day2imgs) #daily_clustering_per_donor      
-        if merge_type == 'multi': # multiple donor
-            day2clus2emb = daily_clustering_per_multidonor(donors2img2embed, donor2day2imgs)
-
-
-    else:
-        if modify == 'true':
-            donors2img2embed = modify_features(donors2img2embed, donor2day2imgs)
+    with open(ADD_file, 'r') as add_file:
+        content = csv.reader(add_file, delimiter = '\n')
+        for row in content:
+            row = row[0].split(',')
+            name = row[0]
+            add = row[1].strip()
+            add = add.replace(' ', ',')
+            ADD = ast.literal_eval("[" + add + "]") # this should be a list of temp, humadity and wind ADD
+            imgname2add[name] = ADD
         
-        if Daily == 'true':
-            daily_clustering(donors2img2embed, donor2day2imgs)
-        elif Daily == 'false':
-            cluster(donors2img2embed, donor2day2imgs)
+
+    with open(embedings_file, 'r') as csv_file:
+        data = csv.reader(csv_file,delimiter = '\n')
+        vectors = []
+        for row in data:
+            row = row[0]
+            row= row.split('JPG')
+            img_name = row[0] + 'JPG'
+            embeding = row[1].strip()
+            embeding = embeding.replace(' ', ',')
+            embeding = ast.literal_eval("[" + embeding[1:-1] + "]") # this embeding is a list now
+            donor_id = img_name.split('/Daily')[0].split('/')[-1]
+            if donor_id not in donors2img2embed and donor_id not in donors2imgs:
+                donors2img2embed[donor_id] = {} 
+                donors2imgs[donor_id] = [] # a list for all of the images belonging to the same donor
+            donors2img2embed[donor_id][img_name] = embeding 
+            # this a dictionary with each donor_id as keys and values are another dictionary
+            # with keys being an image and the values being the feature vector for that imag
+
+            donors2imgs[donor_id].append(img_name)
+
+        donors2imgs_sorted = sort_dates(donors2imgs) # this sorts the images for a donor based on their dates
+        donor2day2imgs = cal_day_from_deth(donors2imgs_sorted)
+
+        if method == 'merge':
+            if modify == 'true':
+                donors2img2embed = modify_features(donors2img2embed, donor2day2imgs)
+            if merge_type =='single': #only one donor
+                day2clus2emb = sequence_finder(donors2img2embed, donor2day2imgs) 
+            if merge_type == 'multi': # multiple donor
+                day2clus2emb = daily_clustering_per_multidonor(donors2img2embed, donor2day2imgs)
+
+
+        else:
+            if modify == 'true':
+                donors2img2embed = modify_features(donors2img2embed, donor2day2imgs)
+            
+            if Daily == 'true':
+                daily_clustering(donors2img2embed, donor2day2imgs)
+            elif Daily == 'false':
+                cluster(donors2img2embed, donor2day2imgs)
