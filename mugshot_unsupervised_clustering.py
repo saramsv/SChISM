@@ -1,5 +1,8 @@
-#python3 embeding_clustering_full_kmeans.py --embeding_file data/pcaUT29-15 --modify false/true --daily false/true  --cluster_number 7 --method merge/not_merge --merge_type single/multi --ADD_file imgname2ADD > daily_merge_7ClusAll
-# the file for this script should be image_name va1l val2.... valn.
+#run: python3 mugshot_unsupervised_clustering.py seq/cluster 
+# seq: if you want to generate the sequences
+#cluster: if you want to generate the clusters using kmeans
+# the file for this script should be img_order,image_name, va1l val2.... valn.
+
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 import sys
@@ -12,9 +15,10 @@ from operator import itemgetter
 from functools import reduce
 from scipy.spatial import distance
 import math
-import sequence
+import mugshot_sequence as sequence
 csv.field_size_limit(sys.maxsize)
 
+method = sys.argv[1] # seq or cluster
 
 def cluster(donor2img2embeding, donor2day2img):
     for donor in donor2img2embeding:
@@ -68,5 +72,7 @@ if __name__ == '__main__':
                 donor2day2imgs["criminal"][picture_num] = []
             donor2day2imgs["criminal"][picture_num].append(img_name)
 
-        #day2clus2emb = sequence.sequence_finder(donors2img2embed, donor2day2imgs) 
-        cluster(donors2img2embed, donor2day2imgs)
+        if method == 'seq':
+            day2clus2emb = sequence.sequence_finder(donors2img2embed, donor2day2imgs) 
+        elif method == 'cluster':
+            cluster(donors2img2embed, donor2day2imgs)

@@ -3,14 +3,16 @@
 #then clean the [] and , from the all_embedings.csv
 import keras
 from keras.applications import ResNet50
+from keras.applications.vgg16 import VGG16
+from keras.applications import VGG19
 from keras.applications.resnet50 import preprocess_input
+from keras.applications.vgg16 import preprocess_input
 from keras.models import Sequential
 from keras.layers import Dense, Flatten, GlobalAveragePooling2D
 from keras.callbacks import TensorBoard
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-from keras.models import Model
 import cv2
 import sys
 import csv
@@ -35,6 +37,8 @@ clustering_model = Sequential()
 if weight_type == 'pt': # this is for pre_trained
     clustering_model.add(ResNet50(include_top = False, pooling='ave', weights = resnet_weigth_path))
     clustering_model.layers[0].trainable = False
+    #clustering_model.add(VGG16(weights= 'imagenet' ,include_top= False))
+    #clustering_model.layers[0].trainable = False
 elif weight_type == 'ft':
     num_classes = 9
     base_model = ResNet50
@@ -53,7 +57,7 @@ elif weight_type == 'ft':
     clustering_model.outputs = [clustering_model.layers[-1].output]
     clustering_model.layers[-1].outbound_nodes = []
 
-    clustering_model.layers[0].trainable = False
+    clustering_model.layers[0].trainable = False # this would be the base model part
 
 
 clustering_model.compile(optimizer='sgd', loss='categorical_crossentropy', metrics=['accuracy'])
@@ -71,6 +75,11 @@ with open(imgs_path) as csv_file:
         correct_path.replace('(', '\(')
         correct_path.replace(')', '\)')
         try:
+            '''
+            #######gray########
+            img_object = cv2.imread(correct_path, cv2.IMREAD_GRAYSCALE)
+            img_object = np.stack((img_object,)*3, axis=-1)
+            '''
             img_object = cv2.imread(correct_path)
             img_object = cv2.resize(img_object, (img_size, img_size))
             img_object = np.array(img_object, dtype = np.float64)
