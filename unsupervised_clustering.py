@@ -29,10 +29,16 @@ import stream_clustering
 def key_func(x):
     # For some year like 2011 the year is 2 digits so the date format should ne %m%d%y but for others like 2015 it should be %m%d%Y
     try:
+        #date = ""
         if '(' in x:     
-            return datetime.datetime.strptime(x.split('D_')[-1].split('(')[0].strip().replace('_',''), '%m%d%y')
-        else: 
-            return datetime.datetime.strptime(x.split('D_')[-1].split('.')[0].strip().replace('_',''), '%m%d%y')
+            date_ = x.split('D_')[-1].split('(')[0].strip().replace('_','')
+        else:
+            date_ = x.split('D_')[-1].split('.')[0].strip().replace('_','')
+        if len(date_) == 6: #the format that has 2 digits for year
+            return datetime.datetime.strptime(date_, '%m%d%y')
+        else:
+            return datetime.datetime.strptime(date_, '%m%d%Y')
+        
     except:
         print(x)
         import bpython
@@ -51,7 +57,10 @@ def convert_to_time(img_name):
         date = img_name.split('/')[-1].split("D_")[1].split(' ')[0]
     # this is the format and we only need the date part UT06-12D_07_26_12 (21).JPG
     date = date.replace('_', '') # to remove the '_'
-    return datetime.datetime.strptime(date, '%m%d%y') #formated as date
+    if len(date) == 6:
+        return datetime.datetime.strptime(date, '%m%d%y') #formated as date
+    else:
+        return datetime.datetime.strptime(date, '%m%d%Y') #formated as date
 
 def cal_day_from_deth(donors2imgs_sorted):
     for key in donors2imgs_sorted:
@@ -120,6 +129,28 @@ def cluster(donor2img2embeding, donor2day2img):
     '''
         for index, label in enumerate(labels):
             print(img_names[index] , ":" , donor, "_",  label)
+
+def cluster_all(donor2img2embeding, donor2day2img):
+    img_names = []
+    vectors = []
+    for donor in donor2img2embeding:
+        for img in donor2img2embeding[donor]:
+            img_names.append(img.replace('JPG','icon.JPG').replace(' ',' '))
+            vectors.append(donor2img2embeding[donor][img])
+    vectors = np.array(vectors)
+    vectors = vectors / vectors.max(axis=0)
+    ## kmeans:
+    kmeans = KMeans(n_clusters = num_clusters)
+    kmeans.fit(vectors)
+    labels = kmeans.predict(vectors)
+    '''
+    ######### Agglomerative ######
+    agglomerative = AgglomerativeClustering(n_clusters = num_clusters, linkage='single')
+    agglomerative.fit(list(vectors))
+    labels = agglomerative.labels_#predict(vectors)
+    '''
+    for index, label in enumerate(labels):
+        print(img_names[index] , ":" , donor, "_",  label)
 
 def daily_clustering(donor2img2embeding, donor2day2img):
     img_names = []
@@ -600,7 +631,8 @@ if __name__ == '__main__':
     donors2imgs = {}
     donors2img2embed = {}
     imgname2add = {}
-
+    
+    '''
     with open(ADD_file, 'r') as add_file:
         content = csv.reader(add_file, delimiter = '\n')
         for row in content:
@@ -611,7 +643,7 @@ if __name__ == '__main__':
             ADD = ast.literal_eval("[" + add + "]") # this should be a list of temp, humadity and wind ADD
             imgname2add[name] = ADD
         
-
+    '''
     with open(embedings_file, 'r') as csv_file:
         data = csv.reader(csv_file,delimiter = '\n')
         vectors = []
@@ -651,4 +683,5 @@ if __name__ == '__main__':
             if Daily == 'true':
                 daily_clustering(donors2img2embed, donor2day2imgs)
             elif Daily == 'false':
-                cluster(donors2img2embed, donor2day2imgs)
+                #cluster(donors2img2embed, donor2day2imgs)
+                cluster_all(donors2img2embed, donor2day2imgs)
