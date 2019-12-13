@@ -6,12 +6,27 @@ import datetime
 import math
 
 def key_func(x):
-    # For some year like 2011 the year is 2 digits so the date format should be %m%d%y but for others like 2015 it should be %m%d%Y
+    # For some year like 2011 the year is 2 digits so the date format should ne %m%d%y but for others like 2015 it should be %m%d%Y
     try:
+        #date = ""
         if '(' in x:     
-            return datetime.datetime.strptime(x.split('D_')[-1].split('(')[0].strip().replace('_',''), '%m%d%y')
-        else: 
-            return datetime.datetime.strptime(x.split('D_')[-1].split('.')[0].strip().replace('_',''), '%m%d%y')
+            date_ = x.split('D_')[-1].split('(')[0].strip()
+        else:
+            date_ = x.split('D_')[-1].split('.')[0].strip()
+        mdy = date_.split('_')
+        m = mdy[0]
+        d = mdy[1]
+        y = mdy[2]
+        if len(m) == 1:
+            m = '0' + m
+        if len(d) == 1:
+            d = '0' + d
+        date_  = m + d + y
+        if len(date_) == 6: #the format that has 2 digits for year
+            return datetime.datetime.strptime(date_, '%m%d%y')
+        else:
+            return datetime.datetime.strptime(date_, '%m%d%Y')
+        
     except:
         print(x)
         import bpython

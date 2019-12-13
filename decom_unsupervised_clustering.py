@@ -31,9 +31,18 @@ def key_func(x):
     try:
         #date = ""
         if '(' in x:     
-            date_ = x.split('D_')[-1].split('(')[0].strip().replace('_','')
+            date_ = x.split('D_')[-1].split('(')[0].strip()
         else:
-            date_ = x.split('D_')[-1].split('.')[0].strip().replace('_','')
+            date_ = x.split('D_')[-1].split('.')[0].strip()
+        mdy = date_.split('_')
+        m = mdy[0]
+        d = mdy[1]
+        y = mdy[2]
+        if len(m) == 1:
+            m = '0' + m
+        if len(d) == 1:
+            d = '0' + d
+        date_  = m + d + y
         if len(date_) == 6: #the format that has 2 digits for year
             return datetime.datetime.strptime(date_, '%m%d%y')
         else:
@@ -51,16 +60,23 @@ def sort_dates(donors2imgs): #sorts the dates by getting a list of img_names for
     return donors2imgs
 
 def convert_to_time(img_name):
-    if '(' not in img_name:
-        date = img_name.split('/')[-1].split("D_")[1].split('.JPG')[0]
+    if '(' in img_name:     
+        date_ = img_name.split('D_')[-1].split('(')[0].strip()
     else:
-        date = img_name.split('/')[-1].split("D_")[1].split(' ')[0]
-    # this is the format and we only need the date part UT06-12D_07_26_12 (21).JPG
-    date = date.replace('_', '') # to remove the '_'
-    if len(date) == 6:
-        return datetime.datetime.strptime(date, '%m%d%y') #formated as date
+        date_ = img_name.split('D_')[-1].split('.')[0].strip()
+    mdy = date_.split('_')
+    m = mdy[0]
+    d = mdy[1]
+    y = mdy[2]
+    if len(m) == 1:
+        m = '0' + m
+    if len(d) == 1:
+        d = '0' + d
+    date_  = m + d + y
+    if len(date_) == 6: #the format that has 2 digits for year
+        return datetime.datetime.strptime(date_, '%m%d%y')
     else:
-        return datetime.datetime.strptime(date, '%m%d%Y') #formated as date
+        return datetime.datetime.strptime(date_, '%m%d%Y')
 
 def cal_day_from_deth(donors2imgs_sorted):
     for key in donors2imgs_sorted:
