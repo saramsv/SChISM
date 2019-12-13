@@ -134,13 +134,13 @@ def similarity_merge(all_sims, donor2img2embeding, donor2day2img, donor):
 def add_to_similarity_dict(all_sims, similarities, key):#, ratio):
     similarities = sorted(similarities, key=lambda x: x[1], reverse=True)
     max_ = similarities[0][1]
-    threshold = max(0.99 * max_, 0.75)
-    #if key not in all_sims:
-    #    all_sims[key] = [key]
+    threshold = max(0.99 * max_, 0.80)
+    if key not in all_sims:
+        all_sims[key] = [key]
     for ind, pair in enumerate(similarities):
         if pair[1] >= threshold:
-            if key not in all_sims:
-                all_sims[key] = []
+            #if key not in all_sims:
+            #    all_sims[key] = []
             all_sims[key].append(pair[0])
     return all_sims
 
@@ -153,6 +153,10 @@ def print_(all_sims, donor):
         for img in all_sims[key]:
             temp = img.replace('JPG', 'icon.JPG: ')
             print(temp + donor + "_" + str(label))
+def rolling_window(a, window):
+    shape = a.shape[:-1] + (a.shape[-1] - window + 1, window)
+    strides = a.strides + (a.strides[-1],)
+    return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 #################################################################
 def sequence_finder(donor2img2embeding, donor2day2img):
@@ -164,49 +168,40 @@ def sequence_finder(donor2img2embeding, donor2day2img):
         all_embs = donor2img2embeding[donor]
         all_sims = {} #key = imgs, value = [[im1, dist],im2, dit[],...]
 
-        window = 5
-
-        for i in range(window, len(days) - 30 - window):
-            imgs = donor2day2img[donor][days[i]] # images for day = days[i]
-
-            for img in imgs:
-                emb = all_embs[img]
-                key = img
-                for seen in all_sims:
-                    for x in all_sims[seen]:
-                        if img ==  x: # if it is one of the matched ones
-                            key = seen
-                    
-                '''
-                day_current_imgs = donor2day2img[donor][days[i]]
-                similarities = []
-                for day_current_img in day_current_imgs:
-                    emb2 = all_embs[day_current_img] 
-                    sim = cosine_similarity(emb, emb2)
-                    similarities.append([day_current_img, sim])
-                all_sims = add_to_similarity_dict(all_sims, similarities, key)
-                '''
-
-                for w in range(1, window + 1):
-                    day_before_imgs = donor2day2img[donor][days[i-w]]
-                    day_after_imgs = donor2day2img[donor][days[i+w]]
-                    similarities = []
-                    for day_before_img in day_before_imgs:
-                        emb2 = all_embs[day_before_img] 
-                        sim = cosine_similarity(emb, emb2)
-                        similarities.append([day_before_img, sim])
-                    all_sims = add_to_similarity_dict(all_sims, similarities, key)
-
-                    similarities = []
-                    for day_after_img in day_after_imgs:
-                        emb2 = all_embs[day_after_img] 
-                        sim = cosine_similarity(emb, emb2)
-                        similarities.append([day_after_img, sim])
-                    all_sims = add_to_similarity_dict(all_sims, similarities, key) 
+        window_size = 6
+        compared = []
+        windows = rolling_window(np.array(range(len(days))), window_size)
+        #print(windows)
+        for window in windows:
+            for ind1 in range(len(window)):
+                for ind2 in range(ind1 + 1, len(window)):
+                    pair = (window[ind1], window[ind2])
+                    if pair not in compared:
+                        compared.append(pair)
+                        day1_ind = pair[0]
+                        day2_ind = pair[1]
+                        day1_imgs = donor2day2img[donor][days[day1_ind]]
+                  
+                        for day1_img in day1_imgs:
+                            emb = all_embs[day1_img]
+                            key = day1_img
+                            for seen in all_sims:
+                                for x in all_sims[seen]:
+                                    if day1_img ==  x: # if it is one of the matched ones
+                                        key = seen
+                                
+                            day2_imgs = donor2day2img[donor][days[day2_ind]]
+                            similarities = []
+                            for day2_img in day2_imgs:
+                                emb2 = all_embs[day2_img] 
+                                sim = cosine_similarity(emb, emb2)
+                                #print(day1_img, day2_img, sim)
+                                similarities.append([day2_img, sim])
+                            all_sims = add_to_similarity_dict(all_sims, similarities, key)
 
         #print_(all_sims, donor)
         all_sims = overlap_merge(all_sims)
-        print_(all_sims, donor)
+        #print_(all_sims, donor)
 
-        #similarity_merge(all_sims, donor2img2embeding, donor2day2img, donor)
+        similarity_merge(all_sims, donor2img2embeding, donor2day2img, donor)
 
