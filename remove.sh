@@ -3,7 +3,6 @@
 #lines_to_remove has the lines with those paths. these lines would have the same format as the lines in originalFile
 cat $1 | while read line
 do
-  #echo $line
   grep "$line" $2
 done  
 

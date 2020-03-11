@@ -21,6 +21,7 @@ from functools import reduce
 from scipy.spatial import distance
 import math
 import decom_sequence as sequence
+import multi_donor_decom_sequence as sequence2
 import stream_clustering
 #from kneed import KneeLocator
 ## to use itemgetter(the indices seperated by ,)(the list name)
@@ -699,8 +700,9 @@ if __name__ == '__main__':
         donors2imgs_sorted = sort_dates(donors2imgs) # this sorts the images for a donor based on their dates
         donor2day2imgs = cal_day_from_deth(donors2imgs_sorted)
         
-        #day2clus2emb = sequence2.sequence_finder(donors2img2embed, donor2day2imgs, daily_data) 
-        day2clus2emb = sequence.sequence_finder(donors2img2embed, donor2day2imgs) 
+        daily_data = daily_based_data(donors2img2embed, donor2day2imgs)
+        day2clus2emb = sequence2.sequence_finder(donors2img2embed, donor2day2imgs, daily_data) 
+        #day2clus2emb = sequence.sequence_finder(donors2img2embed, donor2day2imgs) 
         #cluster_all(donors2img2embed, donor2day2imgs)
         '''
         if method == 'merge':

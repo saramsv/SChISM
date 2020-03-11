@@ -6,7 +6,7 @@ import datetime
 import math
 
 #threshold = [0.7, 0.75, 0.8, 0.85, 0.88, 0.9, 0.92, 0.95, 0.97]
-threshold = [0.75]#, 0.8, 0.85, 0.9, 0.95]
+threshold = [0.85]#, 0.75, 0.8, 0.85, 0.9, 0.95]
 
 def key_func(x):
     # For some year like 2011 the year is 2 digits so the date format should ne %m%d%y but for others like 2015 it should be %m%d%Y
@@ -65,7 +65,7 @@ def cosine_similarity(v1,v2):
         sumxy += x*y
     return sumxy/math.sqrt(sumxx*sumyy)
 
-def overlap_merge(all_sims):
+def overlap_merge(all_sims, all_embs):
     no_more_merge = False
     while no_more_merge == False:
         merged_dict = {}
@@ -77,15 +77,28 @@ def overlap_merge(all_sims):
                 if key1 not in merged_dict :
                     merged_dict[key1] = list(set(all_sims[key1]))#to remove the duplicates
                 for key2 in all_sims_keys:
-                    if key1 != key2:
+                    if key1 != key2 and key2 not in seee:
                         intersect = len(set(all_sims[key1]).intersection(set(all_sims[key2])))
                         if intersect != 0:
                             no_more_merge = False
+                            '''
                             merged_dict[key1].extend(list(set(all_sims[key2])))
+                            all_embs[key1].extend(list(set(all_embs[key2])))
+                            '''
+                            try:
+                                merged_dict[key1].extend(all_sims[key2])
+                                all_embs[key1].extend(all_embs[key2])
+                            except:
+                                import bpython
+                                bpython.embed(locals())
+                                exit()
+
+                            del all_embs[key2]
                             merged_dict[key1] = sorted(merged_dict[key1], key = key_func)
                             seen.append(key2)
+                            seen.append(key1)
         all_sims = merged_dict
-    return all_sims 
+    return all_sims, all_embs
 #########################################################################
 def find_tail_head(all_sims, key1, key2):
     list1 = sorted(all_sims[key1], key = key_func)
@@ -124,69 +137,65 @@ def find_tail_head(all_sims, key1, key2):
             head = sequence2[:tail_size]
     return head, tail, tail_size 
     
-
-def neighbore_cluster_merge(cluster_ave, all_sims, threshold):
+##########################################################################
+def similarity_merge(all_sims, donor2img2embeding, donor2day2img, donor):
     no_more_merge = False
     while no_more_merge == False:
-        no_more_merge = True
-        keys = list(cluster_ave.keys())
-        ordered_keys = sorted(cluster_ave, key = key_func)
+        merged_dict = {}
         seen = []
+        all_sims_keys = list(all_sims.keys())
+        no_more_merge = True
 
-        for index, key in enumerate(ordered_keys):
-            limit = len(ordered_keys)
-            if index not in seen:
-                cluster_size = len(all_sims[key])
-                if cluster_size < 4:
-                    #compare to few before and after
-                    #pick the closest
-                    similarities = []
-                    count = 1
-                    while index >= 1 and count < 5:
-                        window_index = index - count
-                        if window_index not in seen and window_index >= 0:
-                            key2 = ordered_keys[window_index]
-                            sim = cosine_similarity(cluster_ave[key], cluster_ave[key2])
-                            similarities.append([key2, window_index, sim])
-                        count += 1
+        for key1 in all_sims_keys:
+            if key1 in seen:
+                continue
 
-                    while index < len(ordered_keys)  and count  < 10:
-                        window_index = index + count
-                        if window_index not in seen and window_index < len(ordered_keys):
-                            key2 = ordered_keys[window_index]
-                            sim = cosine_similarity(cluster_ave[key], cluster_ave[key2])
-                            similarities.append([key2, window_index, sim])
-                        count += 1
-                    if len(similarities) > 0:
-                        similarities = sorted(similarities, key=lambda x: x[2], reverse=True) 
-                        #print("in: ", key)
-                        #print("oon: ", key2)
-                        if similarities[0][2] > threshold - 0.1:
-                            no_more_merge = False
-                            key2 = similarities[0][0] # the key with highest similarity
-                            seen.append(index)
-                            seen.append(similarities[0][1]) #the index
-                            all_sims[key].extend(list(set(all_sims[key2])))
-                            cluster_ave[key] = list((np.asarray(cluster_ave[key]) +
-                                                    np.asarray(cluster_ave[key2]))/2) # the new ave
+            if key1 not in merged_dict :
+                # to remove the duplicates
+                merged_dict[key1] = list(set(all_sims[key1]))
 
-    return all_sims
+            one2nsimi = []
+            for key2 in all_sims_keys:
+                if all_sims_keys.index(key2) <= all_sims_keys.index(key1):
+                    continue
+                head, tail, tail_size = find_tail_head(all_sims, key1, key2)
+                if tail_size >= 1 :
+                    similarity = []
+                    for img_index in range(tail_size):
+                        emb1 = donor2img2embeding[donor][tail[img_index]]
+                        emb2 = donor2img2embeding[donor][head[img_index]]
+                        simi = cosine_similarity(emb1, emb2)
+                        similarity.append(simi)
+                    sub_seq_simi = sum(similarity) / tail_size #average similarity
+                    one2nsimi.append([key2,sub_seq_simi])
+            if len(one2nsimi) > 0:
+                one2nsimi = sorted(one2nsimi, key=lambda x: x[1], reverse=True)
+                val = max(one2nsimi[0][1], 0.8)
+                if one2nsimi[0][1] >= val:
+                    #one2nsimi.append([key2,sub_seq_simi])
+                    no_more_merge = False
+                    merged_dict[key1].extend(list(set(all_sims[one2nsimi[0][0]])))
+                    merged_dict[key1] = sorted(merged_dict[key1], key = key_func)
+                    seen.append(one2nsimi[0][0])
+        all_sims = merged_dict
+    print_(merged_dict, donor)
 
-##########################################################################
 #########################################################################
-def cluster_similarity(all_sims, donor2img2embeding, donor2day2img, donor, threshold):
+def cluster_similarity(all_sims, all_embs, threshold):
+    print(threshold)
     keys = list(all_sims.keys())
     cluster_ave = {}
     for key in keys:
         vectors = 0
-        imgs = all_sims[key]
-        num_imgs = len(imgs)
-        for img in imgs:
-            vectors += np.asarray(donor2img2embeding[donor][img])
-        cluster_ave[key] = list(vectors/num_imgs) # the average of the embeddings in the cluster
+        num = len(all_embs[key])
+        for emb in all_embs[key]:
+            vectors += np.asarray(emb)
+        cluster_ave[key] = list(vectors/num) # the average of the embeddings in the cluster
 
     no_more_merge = False
+    threshold = threshold - 0.1
     while no_more_merge == False:
+        print("another_loop")
         no_more_merge = True
         keys = list(cluster_ave.keys())
         num_keys = len(keys)
@@ -206,7 +215,7 @@ def cluster_similarity(all_sims, donor2img2embeding, donor2day2img, donor, thres
         for i, l in enumerate(sorted(all_dists, key=lambda x: x[2], reverse=True)): #descending
             if l[2] < threshold:
                 break
-            if l[0] not in seen and l[1] not in seen and l[2] > (threshold):
+            if l[0] not in seen and l[1] not in seen and l[2] > threshold:
                 #l[0] is key1, l[1] is key2, l[2] is the similarity
                 no_more_merge = False
                 all_sims[l[0]].extend(list(set(all_sims[l[1]])))
@@ -216,11 +225,11 @@ def cluster_similarity(all_sims, donor2img2embeding, donor2day2img, donor, thres
                 del cluster_ave[l[1]]
                 seen.add(l[0])
                 seen.add(l[1])
-    all_sims = neighbore_cluster_merge(cluster_ave, all_sims, threshold)
-    print_(all_sims, donor, threshold)
+    print_(all_sims, threshold)
+
 
 ##########################################################################
-def similarity_merge(all_sims, donor2img2embeding, donor2day2img, donor, threshold):
+def similarity_merge2(all_sims, donor2img2embeding, donor2day2img, donor, threshold):
     no_more_merge = False
     while no_more_merge == False:
         #merged_dict = {}
@@ -261,30 +270,34 @@ def similarity_merge(all_sims, donor2img2embeding, donor2day2img, donor, thresho
     cluster_similarity(all_sims, donor2img2embeding, donor2day2img, donor, threshold)
 
 ####################################################################
-def add_to_similarity_dict(all_sims, similarities, key, t):
+def add_to_similarity_dict(all_sims, similarities, key, t, all_embs, emb1, embs):
     similarities = sorted(similarities, key=lambda x: x[1], reverse=True)
+    embs = sorted(embs, key=lambda x: x[1], reverse=True)
     max_ = similarities[0][1]
     threshold = max(0.99 * max_, t)
     if key not in all_sims:
         all_sims[key] = [key]
+        all_embs[key] = [emb1]
     for ind, pair in enumerate(similarities):
         if pair[1] >= threshold:
             #if key not in all_sims:
             #    all_sims[key] = []
             all_sims[key].append(pair[0])
-    return all_sims
+            all_embs[key].append(embs[ind][0])
+    print(len(all_sims))
+    print(len(all_embs))
+    return all_sims, all_embs
 
 
 ##################################################################
-def print_(all_sims, donor, threshold):
+def print_(all_sims, threshold):
     label = 0
-    with open(str(donor) + 'clusters_'+ str(threshold), 'a') as cluster_file:
+    with open('clusters_multidonor', 'a') as cluster_file:
         for key in all_sims:
             label = label + 1
             for img in all_sims[key]:
                 temp = img.replace('JPG', 'icon.JPG: ')
-                #print(temp + donor + "_" + str(label))
-                row = temp + donor + "_" + str(label).zfill(4) + '\n'
+                row = temp + str(label) + '\n'
                 cluster_file.write(row)
 
 
@@ -294,46 +307,56 @@ def rolling_window(a, window):
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 #################################################################
-def sequence_finder(donor2img2embeding, donor2day2img):
-
-    for donor in donor2img2embeding:
-        #if donor == 'UT16-13D':
-        days = list(donor2day2img[donor].keys())
-        days.sort()
-        all_embs = donor2img2embeding[donor]
-        all_sims = {} #key = imgs, value = [[im1, dist],im2, dit[],...]
-        for t in threshold:
-
-            window_size = 4
-            compared = []
-            windows = rolling_window(np.array(range(len(days))), window_size)
-            for window in windows:
-                for ind1 in range(len(window)):
-                    for ind2 in range(ind1 + 1, len(window)):
-                        pair = (window[ind1], window[ind2])
-                        if pair not in compared:
+def sequence_finder(donor2img2embeding, donor2day2img, daily_data):
+    #daily_data[day][0] is the image names for day
+    #daily_data[day][1] is the image embeddings for day
+    days = list(daily_data.keys())
+    days.sort()
+    all_sims = {} #key = imgs, value = [[im1, dist],im2, dit[],...]
+    all_embs = {}
+    print(days)
+    for t in threshold:
+        window_size = 4
+        compared = []
+        windows = rolling_window(np.array(range(len(days))), window_size)
+        for window in windows:
+            for ind1_ in window:
+                for ind2_ in window:
+                    ind1 = days[ind1_]
+                    ind2 = days[ind2_]
+                    if ind1 == ind2:
+                        continue
+                    else:
+                        pair = (ind1, ind2)
+                        pair2 = (ind2, ind1)
+                        if pair not in compared and pair2 not in compared:
                             compared.append(pair)
+                            compared.append(pair2)
                             day1_ind = pair[0]
                             day2_ind = pair[1]
-                            day1_imgs = donor2day2img[donor][days[day1_ind]]
+                            day1_imgs = daily_data[day1_ind][0]
+                            day1_embs = daily_data[day1_ind][1]
+                            day2_imgs = daily_data[day2_ind][0]
+                            day2_embs = daily_data[day2_ind][1]
                       
-                            for day1_img in day1_imgs:
-                                emb = all_embs[day1_img]
+                            for index, day1_img in enumerate(day1_imgs):
+                                emb = day1_embs[index]
                                 key = day1_img
                                 for seen in all_sims:
                                     for x in all_sims[seen]:
                                         if day1_img ==  x: # if it is one of the matched ones
                                             key = seen
                                     
-                                day2_imgs = donor2day2img[donor][days[day2_ind]]
                                 similarities = []
-                                for day2_img in day2_imgs:
-                                    emb2 = all_embs[day2_img] 
+                                embs = []
+                                for index2, day2_img in enumerate(day2_imgs):
+                                    emb2 = day2_embs[index2]
                                     sim = cosine_similarity(emb, emb2)
                                     similarities.append([day2_img, sim])
-                                all_sims = add_to_similarity_dict(all_sims, similarities, key, t)
-            all_sims2 = overlap_merge(all_sims)
-            #print_(all_sims, donor, t)
-            #cluster_similarity(all_sims2, donor2img2embeding, donor2day2img, donor, t)
-            similarity_merge(all_sims2, donor2img2embeding, donor2day2img, donor, t)
+                                    embs.append([emb2, sim])
+                                all_sims, all_embs = add_to_similarity_dict(all_sims, similarities, key, t, all_embs, emb,embs)
 
+        all_sims2, all_embs2 = overlap_merge(all_sims, all_embs)
+
+        cluster_similarity(all_sims2, all_embs2, t)
+ 
