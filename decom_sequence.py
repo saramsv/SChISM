@@ -5,10 +5,10 @@ import ast
 import datetime
 import math
 
-#threshold = [0.7, 0.75, 0.8, 0.85, 0.88, 0.9, 0.92, 0.95, 0.97]
 alphas = [0.99] #[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] #[0.99] #[ 0.8, 0.85, 0.9, 0.95]
 betas = [0.7]#[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] #[0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8]
 window_sizes = [4] #[2, 3, 4, 5, 6, 7, 8, 9, 10]
+threshold = [0.75]#, 0.8, 0.85, 0.9, 0.95]
 
 def key_func(x):
     # For some year like 2011 the year is 2 digits so the date format should ne %m%d%y but for others like 2015 it should be %m%d%Y
@@ -127,7 +127,7 @@ def find_tail_head(all_sims, key1, key2):
     return head, tail, tail_size 
     
 
-def neighbore_cluster_merge(cluster_ave, all_sims, beta):
+def neighbore_cluster_merge(cluster_ave, all_sims, threshold):
     no_more_merge = False
     while no_more_merge == False:
         no_more_merge = True
@@ -163,7 +163,7 @@ def neighbore_cluster_merge(cluster_ave, all_sims, beta):
                         similarities = sorted(similarities, key=lambda x: x[2], reverse=True) 
                         #print("in: ", key)
                         #print("oon: ", key2)
-                        if similarities[0][2] > beta:
+                        if similarities[0][2] > threshold - 0.1:
                             no_more_merge = False
                             key2 = similarities[0][0] # the key with highest similarity
                             seen.append(index)

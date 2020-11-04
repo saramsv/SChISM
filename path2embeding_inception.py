@@ -26,8 +26,7 @@ body_parts = ['arm', 'hand', 'foot', 'legs','fullbody', 'head','backside',  'tor
 
 model_name = 'inception_10000_epoch_-118-_acc_0.999569-_val_acc_0.98315.h5'
 model_type = 'inception'
-print("/home/mousavi/da1/icputrd/bodyPartClassification/models/" + model_type + '/' + model_name)
-model = load_model("/home/mousavi/da1/icputrd/bodyPartClassification/models/" + model_type + '/' + model_name)
+model = load_model("../bodyPartClassification/models/" + model_type + '/' + model_name)
 
 model_copy = keras.models.clone_model(model)
 model_copy.set_weights(model.get_weights())

@@ -185,6 +185,21 @@ def daily_based_data(donor2img2embeding, donor2day2img):
                 days_data[day][1].append(donor2img2embeding[donor][img])
     return days_data
 
+def daily_based_data(donor2img2embeding, donor2day2img):
+    img_names = []
+    vectors = []
+    days_data = {}
+    for donor in donor2day2img:
+        for day in donor2day2img[donor]:
+            if day not in days_data:
+                days_data[day] = [0, 0]
+                days_data[day][0] = [] # this would contain the image_names for this day
+                days_data[day][1] = [] # this would contain the embedings for this day
+            days_data[day][0].extend(donor2day2img[donor][day]) # used extend beacuse donor2day2img[donor][day] is a list
+            for img in donor2day2img[donor][day]:
+                days_data[day][1].append(donor2img2embeding[donor][img])
+    return days_data
+
 def daily_clustering(donor2img2embeding, donor2day2img):
     img_names = []
     vectors = []

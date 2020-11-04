@@ -1,5 +1,5 @@
 #this script save the large claster in a file and the small ones along their embeddings in another
-#run: python3 find_large_clusters.py dest_file1 dest_file2 img_num
+#run: python3 find_large_clusters.py src_file dest_file img_num
 import pandas as pd
 import csv
 import sys

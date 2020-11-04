@@ -16,12 +16,11 @@ merged = pd.DataFrame()
 
 
 for index, row in cluster_df.iterrows():
-    path = row['path'].strip()
-    cluster_label = row['cluster_label'].strip()
     try:
-        gt = gt_df.loc[gt_df['path'] == path]
+        path = row['path'].strip()
+        cluster_label = row['cluster_label'].strip()
+        gt = gt_df.loc[gt_df['path']==path]
         gt_label = gt['gt_label'].values[0].strip()
         print(gt_label + "_"+ path + ":" + cluster_label)
     except:
         pass
-
