@@ -3,9 +3,9 @@
 #lines_to_remove has the lines with those paths. these lines would have the same format as the lines in originalFile
 cat $1 | while read line
 do
-  #echo $line
-  grep "$line" $2
+  grep "$line" $2 >> 2berem
 done  
 
 ##Then do 
-#grep -vxFf lines_to_remove originalFile > originalFile_with_non_of_the_lines_with_tha_paths_to_be_removed
+grep -vxFf 2berem $2 > $2'_remains'
+rm 2berem

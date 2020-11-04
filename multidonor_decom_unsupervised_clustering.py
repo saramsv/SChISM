@@ -1,5 +1,5 @@
-#python3 decom_unsupervised_clustering.py --embeding_file /data/sara/SChISM/data/ut1all_2011_usedForECCV20/PCAed/UT102_incept_PCAed  --cluster_number 9
-#old:python3 embeding_clustering_full_kmeans.py --embeding_file data/pcaUT29-15 --modify false/true --daily false/true  --cluster_number 7 --method merge/not_merge --merge_type single/multi --ADD_file imgname2ADD > daily_merge_7ClusAll
+#python3 embeding_clustering_full_kmeans.py --embeding_file data/pcaUT29-15 --modify false/true --daily false/true  --cluster_number 7 --method merge/not_merge --merge_type single/multi --ADD_file imgname2ADD > daily_merge_7ClusAll
+#python3 decom_unsupervised_clustering.py --embeding_file UT100_11D_incep_embeds  --cluster_number 9 > ut100_incep_9clusters
 # the file for this script should be image_name va1l val2.... valn.
 from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
@@ -20,8 +20,8 @@ from operator import itemgetter
 from functools import reduce
 from scipy.spatial import distance
 import math
-#import decom_sequence as sequence
-import new_sequence as sequence
+import decom_sequence as sequence
+import multi_donor_decom_sequence as sequence2
 import stream_clustering
 #from kneed import KneeLocator
 ## to use itemgetter(the indices seperated by ,)(the list name)
@@ -168,7 +168,7 @@ def cluster_all(donor2img2embeding, donor2day2img):
     labels = agglomerative.labels_#predict(vectors)
     '''
     for index, label in enumerate(labels):
-        print("{}:{}_{}_kmeans".format(img_names[index] , donor,  label))
+        print(img_names[index] , ":" , donor, "_",  label)
 
 def daily_based_data(donor2img2embeding, donor2day2img):
     img_names = []
@@ -700,8 +700,9 @@ if __name__ == '__main__':
         donors2imgs_sorted = sort_dates(donors2imgs) # this sorts the images for a donor based on their dates
         donor2day2imgs = cal_day_from_deth(donors2imgs_sorted)
         
-        #day2clus2emb = sequence2.sequence_finder(donors2img2embed, donor2day2imgs, daily_data) 
-        day2clus2emb = sequence.sequence_finder(donors2img2embed, donor2day2imgs) 
+        daily_data = daily_based_data(donors2img2embed, donor2day2imgs)
+        day2clus2emb = sequence2.sequence_finder(donors2img2embed, donor2day2imgs, daily_data) 
+        #day2clus2emb = sequence.sequence_finder(donors2img2embed, donor2day2imgs) 
         #cluster_all(donors2img2embed, donor2day2imgs)
         '''
         if method == 'merge':

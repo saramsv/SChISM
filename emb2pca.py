@@ -1,4 +1,4 @@
-#python3 resnet2pca.py --embeding_file 50000resnet.csv > 50000PCAed64
+#python3 emb2pca.py --embeding_file 50000resnet.csv > 50000PCAed64
 # the input file is image_name var1 var2.....varn. 
 #NOTE: No '' round the image_name 
 import csv
@@ -6,6 +6,8 @@ from sklearn.decomposition import PCA
 import argparse
 import ast
 import numpy as np
+import sys
+csv.field_size_limit(sys.maxsize)
 
 
 parser = argparse.ArgumentParser()
