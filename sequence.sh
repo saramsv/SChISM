@@ -1,4 +1,4 @@
-cat ../data/annotated_donor_ids | while read line
+cat $1 | while read line
 do
     echo $line
     name="../data/sequences/"$line"_imgs"
@@ -9,7 +9,7 @@ do
         continue
     else
         echo "Staterd generating sequence for donor: "$line
-        grep "sara_img/"$line /home/mousavi/new_naming_flat_list_img_paths_NoPS > $name
+        grep "sara_img/"$line $2 > $name
         python3 decom_sequence_generator_keras_pcaed.py --path $name --donor_id $line 
     fi
 done
