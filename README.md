@@ -11,3 +11,8 @@ input_file1 should include the id for all subjects(donors) and input_file2 shoul
 ```
 bash sequence.sh input_file1 input_file2
 ```
+## Docker
+```
+docker build . -t <docker_image_name>
+docker run --gpus all -it --name <container_name> <docker_image_name> bash
+```
