@@ -7,7 +7,8 @@ Tensoflow 1.15.2
 opencv-python
 ```
 ## Run
-donor_names file includes the id for all subjects(donors) that we are interested in generating the sequences for, and all_img_names file includes paths to all images. ```
+donor_names file includes the id for all subjects(donors) that we are interested in generating the sequences for, and all_img_names file includes paths to all images. 
+```
 bash sequence.sh donor_names all_img_names
 ```
 This query results in multiple files stored in /usb/featuresANDsequences/ for each specific donor. These files include pkl files to save some of the computed features (preventing recalculating them each time we run the program), the resulted clusters/sequences, and the list of images that the algorithm detected as individual clusters.
