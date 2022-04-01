@@ -29,7 +29,9 @@ on a different terminal:
 - ssh da1
 - cd /data/icputrd/visulizeClusters/static/Cluster-HTMLs/ClusterAll1Million
 - bash make_html.sh <donor_id>_pcaed_sequenced
+```
 It's better to run the following two steps in tmux so that the server is always running...
+```
 - cd /data/icputrd/visulizeClusters/static
 - python -m SimpleHTTPServer 8000
 ```
