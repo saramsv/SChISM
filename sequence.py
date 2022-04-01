@@ -233,11 +233,11 @@ def add_to_similarity_dict(all_sims, similarities, key, count, mean_sim):#, rati
 
 
 ##################################################################
-def print_(all_sims, donor):
+def print_(all_sims, donor, root_dir):
     label = 0
     not_sequenced = []
     print(len(all_sims))
-    with open("../data/sequences/" + donor + "_pcaed_sequenced", 'w') as f_seq:
+    with open( root_dir + donor + "_pcaed_sequenced", 'w') as f_seq:
         for key in all_sims:
             if len(all_sims[key]) > 1:
                 label = label + 1
@@ -247,7 +247,7 @@ def print_(all_sims, donor):
                     f_seq.write(temp + donor + "_" + str(label) + "\n")
             else:
                 not_sequenced.append(all_sims[key])
-    with open("../data/sequences/" + donor + "_not_sequenced", 'w') as f:
+    with open(root_dir + donor + "_not_sequenced", 'w') as f:
         for image in not_sequenced: 
             f.write(image[0] + "\n")
 #################################################################
@@ -278,7 +278,7 @@ def match(day1, day2, all_sims, count, mean_sim, donor2day2img, all_embs, donor)
         all_sims, mean_sim = add_to_similarity_dict(all_sims, similarities, key, count, mean_sim)
     return all_sims, mean_sim, count
 #################################################################
-def sequence_finder(donor2img2embeding, donor2day2img):
+def sequence_finder(donor2img2embeding, donor2day2img, root_dir):
     for donor in donor2img2embeding:
         days = list(donor2day2img[donor].keys())
         days.sort()
@@ -308,7 +308,7 @@ def sequence_finder(donor2img2embeding, donor2day2img):
         all_sims, mean_sim, count = match(day2, day1, all_sims, count, 
                 mean_sim, donor2day2img, all_embs, donor)
         all_sims = overlap_merge(all_sims)
-        print_(all_sims, donor)
+        print_(all_sims, donor, root_dir)
         #cluster_similarity(all_sims2, donor2img2embeding, donor2day2img, donor,alpha, beta, w)
         #similarity_merge(all_sims2, donor2img2embeding, donor2day2img, donor, alpha beta, w)
 

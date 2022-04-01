@@ -80,19 +80,6 @@ if __name__ == '__main__':
     donor_id = args.donor_id
     print(donor_id)
 
-    emb_file_name = "../data/sequences/" + donor_id + "_donors2img2embed.pkl"
-    img_file_name = "../data/sequences/" + donor_id + "_donor2day2imgs.pkl"
-
-    if os.path.isfile(emb_file_name) and os.path.isfile(img_file_name):
-        with open(emb_file_name, 'rb') as fp:
-            donors2img2embed = pickle.load(fp)
-
-        with open(img_file_name, 'rb') as fp:
-            donor2day2imgs = pickle.load(fp)
-
-        day2clus2emb = sequence.sequence_finder(donors2img2embed, donor2day2imgs) 
-        exit()
-
     paths = args.paths
     config = json.load(open(args.config))
     model_path = config['resnet_weigth_path']
@@ -106,6 +93,22 @@ if __name__ == '__main__':
 
     model_no_top.compile(optimizer='sgd', loss='categorical_crossentropy', metrics=['accuracy'])
 
+    root_dir = '/'.join(paths.split('/')[:-1]) + "/"
+
+    emb_file_name = root_dir + donor_id + "_donors2img2embed.pkl"
+    img_file_name = root_dir + donor_id + "_donor2day2imgs.pkl"
+
+    if os.path.isfile(emb_file_name) and os.path.isfile(img_file_name):
+        with open(emb_file_name, 'rb') as fp:
+            donors2img2embed = pickle.load(fp)
+
+        with open(img_file_name, 'rb') as fp:
+            donor2day2imgs = pickle.load(fp)
+
+        day2clus2emb = sequence.sequence_finder(donors2img2embed, donor2day2imgs, root_dir) 
+        exit()
+
+
     #model = load_model(model_path)
     #model_no_top = keras.models.Sequential(model.layers[:-3])
 
@@ -113,6 +116,7 @@ if __name__ == '__main__':
     donors2imgs = {}
     donors2img2embed = {}
     all_features = []
+    print(paths)
 
     image_paths = open(paths).readlines()
     img_size = 224 
@@ -120,25 +124,28 @@ if __name__ == '__main__':
     for row in image_paths:
         try:
             img_name = row.strip()
-            if len(img_name) == 73: 
+            #if len(img_name) == 73: 
                 #if the name is correct and follows the pattern in '/home/mousavi/da1/icputrd/arf/mean.js/public/sara_img/843/84300626.09.JPG' then it will have the len of 73
-                img_object = cv2.imread(img_name)
-                img_object = cv2.resize(img_object, (img_size, img_size))
-                img_object = np.array(img_object, dtype = np.float64)
-                img_object = preprocess_input(np.expand_dims(img_object.copy(), axis = 0))
+            #print(img_name)
+            img_object = cv2.imread(img_name)
+            img_object = cv2.resize(img_object, (img_size, img_size))
+            img_object = np.array(img_object, dtype = np.float64)
+            img_object = preprocess_input(np.expand_dims(img_object.copy(), axis = 0))
 
-                feature = model_no_top.predict(img_object)[0][0][0]
-                #feature = np.array(feature)
-                donor_id = img_name.split("/")[-2]
-                #if donor_id not in donors2img2embed and donor_id not in donors2imgs:
-                if  donor_id not in donors2imgs:
-                    #donors2img2embed[donor_id] = {} 
-                    donors2imgs[donor_id] = [] # a list for all of the images belonging to the same donor
-                #donors2img2embed[donor_id][img_name] = feature 
-                # this a dictionary with each donor_id as keys and values are another dictionary
-                # with keys being an image and the values being the feature vector for that imag
-                all_features.append(feature)
-                donors2imgs[donor_id].append(img_name)
+            feature = model_no_top.predict(img_object)[0][0][0]
+            #feature = np.array(feature)
+            #donor_id = img_name.split("/")[-2]
+            donor_id = img_name.split("/")[-1][:3]
+            #print(donor_id)
+            #if donor_id not in donors2img2embed and donor_id not in donors2imgs:
+            if  donor_id not in donors2imgs:
+                #donors2img2embed[donor_id] = {} 
+                donors2imgs[donor_id] = [] # a list for all of the images belonging to the same donor
+            #donors2img2embed[donor_id][img_name] = feature 
+            # this a dictionary with each donor_id as keys and values are another dictionary
+            # with keys being an image and the values being the feature vector for that imag
+            all_features.append(feature)
+            donors2imgs[donor_id].append(img_name)
         except:
             not_found += 1
 
@@ -156,11 +163,11 @@ if __name__ == '__main__':
     donors2imgs_sorted = sort_dates(donors2imgs) # this sorts the images for a donor based on their dates
     donor2day2imgs = cal_day_from_deth(donors2imgs_sorted)
 
-    with open("../data/sequences/" + donor_id + '_donors2img2embed.pkl', 'wb') as fp:
+    with open(root_dir + donor_id + '_donors2img2embed.pkl', 'wb') as fp:
         pickle.dump(donors2img2embed, fp)
 
-    with open("../data/sequences/" + donor_id + '_donor2day2imgs.pkl', 'wb') as fp:
+    with open(root_dir + donor_id + '_donor2day2imgs.pkl', 'wb') as fp:
         pickle.dump(donor2day2imgs, fp)
     print("INFO: FINISHED WRITING THE PKL FILES")
-    day2clus2emb = sequence.sequence_finder(donors2img2embed, donor2day2imgs) 
+    day2clus2emb = sequence.sequence_finder(donors2img2embed, donor2day2imgs, root_dir) 
 

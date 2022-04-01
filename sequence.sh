@@ -1,8 +1,9 @@
+# Run: bash sequence.sh 
 cat $1 | while read line
 do
     echo $line
-    name="../data/sequences/"$line"_imgs"
-    name2="../data/sequences/"$line"_pcaed_sequenced"
+    name="/usb/featuresANDsequences/"$line"_imgs"
+    name2="/usb/featuresANDsequences/"$line"_pcaed_sequenced"
     if [ -f "$name2" ];
     then
         echo $name2" already exist"
